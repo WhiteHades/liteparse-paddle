@@ -1,0 +1,12 @@
+dist/
+node_modules/
+data/
+examples/
+*.yaml
+.env
+*.md
+scripts/
+LICENSE
+CONTRIBUTING.md
+__tests__/
+eng.traineddata

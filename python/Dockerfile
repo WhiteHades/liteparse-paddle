@@ -10,7 +10,7 @@ COPY pyproject.toml ./
 
 RUN pip install --no-cache-dir \
     --extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cpu/ \
-    paddlepaddle>=3.3.0 \
+    paddlepaddle==3.2.2 \
     paddleocr>=3.4.0 \
     fastapi>=0.131.0 \
     uvicorn>=0.41.0 \

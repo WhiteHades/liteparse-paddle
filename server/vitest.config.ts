@@ -4,6 +4,9 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
+    env: {
+      PADDLE_OCR_URL: "",
+    },
     testTimeout: 30000,
     hookTimeout: 30000,
     teardownTimeout: 30000,

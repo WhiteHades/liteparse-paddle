@@ -40,11 +40,9 @@ export async function parse({
     parseFileSizeBytes.record(file.buffer.length, { "parse.mode": mode });
 
     const defaultOcrUrl =
-      typeof process !== "undefined"
-        ? process.env.PADDLE_OCR_URL || "http://paddle-ocr:8829/ocr"
-        : "http://paddle-ocr:8829/ocr";
+      process.env.PADDLE_OCR_URL ?? "http://paddle-ocr:8829/ocr";
     const finalConfig = {
-      ocrServerUrl: defaultOcrUrl,
+      ...(defaultOcrUrl ? { ocrServerUrl: defaultOcrUrl } : {}),
       ...config,
     };
     const lit = new LiteParse(finalConfig);

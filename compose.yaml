@@ -24,13 +24,17 @@ services:
     container_name: paddle-ocr
     ports:
       - 8829:8829
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    # GPU acceleration (requires NVIDIA Container Toolkit + CUDA paddlepaddle):
+    # 1. Change python/Dockerfile to use the CUDA index:
+    #    --index-url https://www.paddlepaddle.org.cn/packages/stable/cuda12/
+    # 2. Uncomment the deploy block below
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8829/health')"]
       interval: 15s

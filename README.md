@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="media/logo.svg" width="400" alt="liteparse-paddle"/>
+  <img src="media/logo.svg" width="400" alt="liteparse-paddle" style="padding-left: 40px"/>
 </p>
 
 <p align="center">
@@ -31,8 +31,8 @@
 ## Quick Start
 
 ```bash
-git clone https://github.com/WhiteHades/liteparse-paddle ~/Codes/liteparse-paddle
-cd ~/Codes/liteparse-paddle
+git clone https://github.com/WhiteHades/liteparse-paddle
+cd liteparse-paddle
 docker compose build --no-cache
 docker compose up -d
 ```
@@ -67,9 +67,27 @@ lp / curl / direct client
 
 Why this repo exists:
 
-- Upstream LiteParse v2 is Rust-first and fast.
-- Upstream `liteparse-server` is no longer this repo's runtime base.
-- This repo keeps the local HTTP service and the PaddleOCR sidecar you already use, but removes Bun/TypeScript from the parsing path.
+- Upstream LiteParse v2 is Rust-first and fast, but has no built-in HTTP server.
+- PaddleOCR provides more accurate OCR than the default Tesseract engine.
+- This repo bundles both into a single `docker compose up` stack that Just Works.
+
+## Who Is This For?
+
+**You want this if:**
+
+- You need to extract text from PDFs, Office files, or images **on your own machine** (not a cloud API).
+- You want a local HTTP API so your scripts, editors, or other tools can parse documents with a simple `curl` call.
+- You build local automation — shell scripts, cron jobs, AI agent pipelines — that ingest documents.
+- You want better OCR accuracy than Tesseract, without paying for a cloud OCR service.
+- You understand Docker and are comfortable with a `docker compose up` setup.
+
+**You probably don't need this if:**
+
+- You just need to parse a PDF once in a while — install `cargo install liteparse` and use the `lit` CLI directly. It's faster for one-off use.
+- You're building a SaaS that parses millions of documents — this is a single-machine local server, not a multi-tenant production API.
+- You're on a machine without Docker or with very limited RAM (<4GB) — the PaddleOCR sidecar needs ~2GB for its models.
+
+In short: this is a **local developer/automation tool**, not a cloud service. If you find yourself typing `curl :5000/parse` a lot, this is for you.
 
 ## API
 
@@ -159,20 +177,34 @@ The ImageMagick PDF policy is explicitly opened in the container so image conver
 
 ## Host CLI
 
-There are two ways to use LiteParse locally on this machine.
+There are two ways to use LiteParse without writing HTTP requests.
 
 ### Direct Rust CLI
 
+Install the Rust CLI once:
+
 ```bash
-~/.cargo/bin/lit --version
-~/.cargo/bin/lit parse document.pdf
+cargo install liteparse
 ```
 
-This is the fastest direct path and does not go through the HTTP server.
+The installed binary is called `lit` (not `liteparse` — that's the crate name).
+
+```bash
+lit --version
+lit parse document.pdf
+```
+
+This is the fastest possible path — the binary calls the LiteParse crate directly with no HTTP overhead. Best for one-off local use.
 
 ### `lp` wrapper
 
-Your dotfiles expose `lp` at `~/.local/bin/lp`.
+This repo ships a convenience bash script called `lp` in `bin/lp`. It's an HTTP client that talks to the local server so you get the full parse + OCR pipeline in a single command.
+
+To install:
+
+```bash
+ln -sf "$(pwd)/bin/lp" ~/.local/bin/lp
+```
 
 Examples:
 
@@ -183,13 +215,7 @@ lp --screenshots ./shots doc.pdf
 lp --batch ./in ./out
 ```
 
-`lp` now works again for:
-
-- text mode
-- JSON mode
-- screenshots
-- batch parsing
-- larger Office files
+For detailed CLI flags, run `lp --help`.
 
 ## PaddleOCR Sidecar
 
@@ -215,19 +241,39 @@ To enable GPU later:
 
 ## After Reboot
 
-You already have this wired with a systemd user unit from dotfiles:
+Docker containers don't survive reboots on their own. To auto-start the stack, create a systemd user unit:
+
+```bash
+mkdir -p ~/.config/systemd/user
+cat > ~/.config/systemd/user/liteparse-paddle.service << 'SERVICE'
+[Unit]
+Description=LiteParse PaddleOCR document parsing server
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=%h/liteparse-paddle
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose down
+StandardOutput=journal
+
+[Install]
+WantedBy=default.target
+SERVICE
+
+loginctl enable-linger $USER
+systemctl --user daemon-reload
+systemctl --user enable --now liteparse-paddle.service
+```
+
+Verify:
 
 ```bash
 systemctl --user start liteparse-paddle.service
 systemctl --user status liteparse-paddle.service
-systemctl --user is-enabled liteparse-paddle.service
 ```
 
-The unit runs:
-
-```bash
-cd ~/Codes/liteparse-paddle && docker compose up -d
-```
+The `WorkingDirectory` path above assumes you cloned the repo to `~/liteparse-paddle`. Adjust the path if you cloned elsewhere.
 
 ## Portless
 
@@ -243,36 +289,19 @@ https://liteparse-paddle.localhost
 
 ## Updating
 
-This repo now has one real runtime codepath.
-
 ### Upstream references
 
-- `~/Codes/liteparse` - keep this updated for the Rust crate and CLI reference
-- `~/Codes/liteparse-server` - keep this only as API/reference material if you want
+- The upstream `liteparse` source: `https://github.com/run-llama/liteparse`. Clone it if you want to stay in sync with upstream releases.
+- `crust-v2.0.2` is the tag that was current at the time of this rewrite.
 
-### Actual runtime repo
-
-- `~/Codes/liteparse-paddle` - this repo is the maintained product
-
-### Typical update flow
+### Update the server
 
 ```bash
-cd ~/Codes/liteparse
-git fetch --tags
-git checkout crates-v2.0.2
-
-cd ~/Codes/liteparse-paddle
-cargo build --release --no-default-features
+cd /path/to/liteparse-paddle
+git pull
 docker compose build --no-cache
 docker compose up -d
 ```
-
-If you change the server code, the files that matter are:
-
-- `src/main.rs`
-- `Cargo.toml`
-- `Dockerfile`
-- `compose.yaml`
 
 ## Future Extension: VLM / Markdown Output
 

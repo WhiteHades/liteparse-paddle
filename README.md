@@ -3,34 +3,27 @@
 </p>
 
 <p align="center">
-  <em>Document parsing server powered by LiteParse with PaddleOCR as the default GPU-accelerated OCR backend.</em>
+  <em>Rust-first LiteParse server with PaddleOCR as the default OCR sidecar.</em>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/liteparse-core-2563eb?style=flat-square&logo=readthedocs&logoColor=white"/>
-  <img src="https://img.shields.io/badge/paddleocr-v3.5-f97316?style=flat-square&logo=python&logoColor=white"/>
-  <img src="https://img.shields.io/badge/document--parsing-structured-22c55e?style=flat-square"/>
-  <img src="https://img.shields.io/badge/OCR-109%20languages-8b5cf6?style=flat-square"/>
-  <img src="https://img.shields.io/badge/gpu-CUDA%20ready-06b6d4?style=flat-square"/>
-  <br/>
-  <img src="https://img.shields.io/badge/express-v5-000000?style=flat-square&logo=express"/>
-  <img src="https://img.shields.io/badge/typescript-5-3178C6?style=flat-square&logo=typescript&logoColor=white"/>
+  <img src="https://img.shields.io/badge/rust-liteparse%20v2-000000?style=flat-square&logo=rust&logoColor=white"/>
+  <img src="https://img.shields.io/badge/http-axum-7c3aed?style=flat-square"/>
+  <img src="https://img.shields.io/badge/ocr-paddleocr-orange?style=flat-square&logo=python&logoColor=white"/>
   <img src="https://img.shields.io/badge/docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white"/>
-  <img src="https://img.shields.io/badge/redis-caching-DC382D?style=flat-square&logo=redis&logoColor=white"/>
-  <img src="https://img.shields.io/badge/grafana-dashboards-F46800?style=flat-square&logo=grafana&logoColor=white"/>
   <img src="https://img.shields.io/badge/license-Apache--2.0-3b82f6?style=flat-square"/>
 </p>
 
 <p align="center">
   <a href="#quick-start"><b>Quick Start</b></a> •
   <a href="#api"><b>API</b></a> •
-  <a href="#observability"><b>Observability</b></a> •
+  <a href="#host-cli"><b>Host CLI</b></a> •
   <a href="#after-reboot"><b>After Reboot</b></a> •
-  <a href="#updating-from-upstream"><b>Updating</b></a>
+  <a href="#updating"><b>Updating</b></a>
 </p>
 
 <p align="center">
-  <b>PDF</b> &nbsp;•&nbsp; <b>DOCX</b> &nbsp;•&nbsp; <b>XLSX</b> &nbsp;•&nbsp; <b>PPTX</b> &nbsp;•&nbsp; <b>Images</b>
+  <b>PDF</b> • <b>DOCX</b> • <b>XLSX</b> • <b>PPTX</b> • <b>Images</b>
 </p>
 
 ---
@@ -38,246 +31,260 @@
 ## Quick Start
 
 ```bash
-git clone https://github.com/WhiteHades/liteparse-paddle
-cd liteparse-paddle
-
-# Configure (edit REDIS_PASSWORD in .env)
-cp .env.example .env
-
-# Start all services
+git clone https://github.com/WhiteHades/liteparse-paddle ~/Codes/liteparse-paddle
+cd ~/Codes/liteparse-paddle
+docker compose build --no-cache
 docker compose up -d
-
-# Parse a document
-curl -X POST http://localhost:5000/parse -F "file=@document.pdf"
 ```
 
-**First startup is slow** (2-3 minutes) - PaddleOCR downloads language models on the first request. Subsequent startups are instant.
-
-### Prerequisites
-
-- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/)
-- [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) - optional, for GPU acceleration
-
----
-
-## After Reboot
-
-When your computer restarts, the stack **does not auto-start** by default. Docker containers don't survive reboots on their own. You have two options:
-
-### Option A: One command (fastest)
+Parse a document:
 
 ```bash
-cd ~/Codes/liteparse-paddle && docker compose up -d
+curl -X POST "http://localhost:5000/parse?text=true" \
+  -F "file=@document.pdf"
 ```
 
-### Option B: Systemd (auto-starts on every boot)
+The stack is only two services now:
 
-I've already wired this for you:
+- `liteparse-server` - Rust HTTP wrapper around the LiteParse crate
+- `paddle-ocr` - Python PaddleOCR server at `:8829`
 
-```bash
-# Verify it's enabled
-systemctl --user is-enabled liteparse-paddle.service
+Notes:
 
-# Start now
-systemctl --user start liteparse-paddle.service
+- First build is slow because the server image installs LibreOffice and ImageMagick.
+- First OCR request is slow because PaddleOCR downloads its models.
+- No `.env` file is required for the default local setup.
 
-# Check status
-systemctl --user status liteparse-paddle.service
+## Architecture
+
+```text
+lp / curl / direct client
+  -> POST :5000/parse or :5000/screenshots
+  -> Rust axum server
+  -> LiteParse Rust crate
+  -> HTTP OCR calls to paddle-ocr:8829/ocr when OCR is needed
 ```
 
-To set this up on a new machine:
+Why this repo exists:
 
-```bash
-# 1. Create the service file
-mkdir -p ~/.config/systemd/user
-cat > ~/.config/systemd/user/liteparse-paddle.service << 'SERVICE'
-[Unit]
-Description=LiteParse PaddleOCR document parsing server
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-WorkingDirectory=%h/Codes/liteparse-paddle
-ExecStart=/usr/bin/docker compose up -d
-ExecStop=/usr/bin/docker compose down
-StandardOutput=journal
-
-[Install]
-WantedBy=default.target
-SERVICE
-
-# 2. Enable lingering (keeps user services alive after logout)
-loginctl enable-linger $USER
-
-# 3. Enable and start
-systemctl --user daemon-reload
-systemctl --user enable --now liteparse-paddle.service
-```
-
-The systemd service is a `Type=oneshot` unit - it runs `docker compose up -d` on boot, exits immediately, and Docker keeps the containers alive. On shutdown, `ExecStop` runs `docker compose down`.
-
----
+- Upstream LiteParse v2 is Rust-first and fast.
+- Upstream `liteparse-server` is no longer this repo's runtime base.
+- This repo keeps the local HTTP service and the PaddleOCR sidecar you already use, but removes Bun/TypeScript from the parsing path.
 
 ## API
 
-### POST /parse - extract text
+### `POST /parse`
+
+JSON output:
 
 ```bash
-# JSON output (default)
 curl -X POST http://localhost:5000/parse \
   -F "file=@document.pdf"
-
-# Plain text output
-curl -X POST "http://localhost:5000/parse?text=true" \
-  -F "file=@screenshot.png"
-
-# With OCR language override
-curl -X POST http://localhost:5000/parse \
-  -F "file=@chinese-doc.pdf" \
-  -F 'config={"ocrLanguage":"zh"}'
-
-# Disable OCR (for native-text PDFs)
-curl -X POST http://localhost:5000/parse \
-  -F "file=@text-doc.pdf" \
-  -F 'config={"ocrEnabled":false}'
 ```
 
-PaddleOCR is the **default OCR engine** - you don't need to specify `--ocr-server-url`. If you want to use a different backend, override in the config:
+Plain text output:
+
+```bash
+curl -X POST "http://localhost:5000/parse?text=true" \
+  -F "file=@document.pdf"
+```
+
+With config:
 
 ```bash
 curl -X POST http://localhost:5000/parse \
-  -F "file=@doc.pdf" \
-  -F 'config={"ocrServerUrl":"http://localhost:8828/ocr"}'
+  -F "file=@scanned.pdf" \
+  -F 'config={"ocrLanguage":"zh","dpi":200}'
 ```
 
-### POST /screenshots - render pages as images
+Supported client config keys:
+
+- `ocrLanguage`
+- `ocrEnabled`
+- `ocrServerUrl`
+- `dpi`
+- `maxPages`
+- `targetPages`
+- `password`
+- `preserveVerySmallText`
+- `quiet`
+- `numWorkers`
+
+Compatibility note:
+
+- `preciseBoundingBox` is accepted and ignored so older `lp` clients keep working.
+
+### `POST /screenshots`
 
 ```bash
 curl -X POST "http://localhost:5000/screenshots?pages=1,2,3" \
   -F "file=@document.pdf"
 ```
 
-Returns NDJSON with base64-encoded PNGs.
+Returns NDJSON. Each line contains:
 
----
+- `index`
+- `mimetype`
+- `data` - base64 encoded PNG
+- `page_number`
+- `height`
+- `width`
 
-## PaddleOCR as a system-wide OCR service
-
-The PaddleOCR server runs on port `8829`. Any tool on your machine can use it:
+### `GET /health`
 
 ```bash
-# From a shell script, cron job, or another app
+curl http://localhost:5000/health
+```
+
+Returns HTTP `200` with an empty body.
+
+## Supported Inputs
+
+The server now writes uploads to temp files with the original extension before calling LiteParse. That preserves the path-based conversion flow needed for non-PDF inputs.
+
+Supported in practice:
+
+- PDF
+- Word docs (`.doc`, `.docx`, `.docm`, `.odt`, `.rtf`)
+- PowerPoint (`.ppt`, `.pptx`, `.pptm`, `.odp`)
+- Spreadsheets (`.xls`, `.xlsx`, `.xlsm`, `.ods`, `.csv`, `.tsv`)
+- Images (`.jpg`, `.jpeg`, `.png`, `.gif`, `.bmp`, `.tiff`, `.webp`, `.svg`)
+
+Container packages that make this work:
+
+- LibreOffice - office document conversion
+- ImageMagick - image/PDF conversion helpers
+
+The ImageMagick PDF policy is explicitly opened in the container so image conversion paths that round-trip through PDF do not fail.
+
+## Host CLI
+
+There are two ways to use LiteParse locally on this machine.
+
+### Direct Rust CLI
+
+```bash
+~/.cargo/bin/lit --version
+~/.cargo/bin/lit parse document.pdf
+```
+
+This is the fastest direct path and does not go through the HTTP server.
+
+### `lp` wrapper
+
+Your dotfiles expose `lp` at `~/.local/bin/lp`.
+
+Examples:
+
+```bash
+lp doc.pdf
+lp -j doc.pdf
+lp --screenshots ./shots doc.pdf
+lp --batch ./in ./out
+```
+
+`lp` now works again for:
+
+- text mode
+- JSON mode
+- screenshots
+- batch parsing
+- larger Office files
+
+## PaddleOCR Sidecar
+
+The OCR server is still separately useful:
+
+```bash
 curl -X POST http://localhost:8829/ocr \
-  -F "file=@screenshot.png" \
-  -F "language=en" | jq '.results[].text'
+  -F "file=@image.png" \
+  -F "language=en"
 ```
 
-This is useful for:
-- **Desktop automation** - OCR a screen region and extract text
-- **Batch processing** - cron job that OCRs incoming scanned PDFs
-- **Other web apps** - any server on your machine can POST images to `:8829`
+This keeps the OCR layer isolated from the parser runtime. That makes it easier to swap OCR backends later without rewriting the Rust server.
 
----
+## GPU
 
-## CLI Usage (lit)
+The default compose file keeps PaddleOCR CPU-only for portability.
 
-The standard `lit` CLI (`@llamaindex/liteparse`) defaults to Tesseract.js when run directly on the host. To use it with the Docker PaddleOCR:
+To enable GPU later:
+
+1. Change `python/Dockerfile` to install CUDA PaddlePaddle.
+2. Add the NVIDIA device reservation block back into `compose.yaml`.
+3. Rebuild only `paddle-ocr`.
+
+## After Reboot
+
+You already have this wired with a systemd user unit from dotfiles:
 
 ```bash
-lit parse document.pdf --ocr-server-url http://localhost:8829/ocr
+systemctl --user start liteparse-paddle.service
+systemctl --user status liteparse-paddle.service
+systemctl --user is-enabled liteparse-paddle.service
 ```
 
-Or set it as default for your shell session:
+The unit runs:
 
 ```bash
-export LIT_OCR_SERVER_URL=http://localhost:8829/ocr
-lit parse document.pdf  # uses PaddleOCR automatically
+cd ~/Codes/liteparse-paddle && docker compose up -d
 ```
 
----
-
-## Portless local dev
-
-With [portless](https://github.com/WhiteHades/portless) installed:
+## Portless
 
 ```bash
 portless alias liteparse-paddle 5000
 ```
 
-The API is then available at `https://liteparse-paddle.localhost`.
+Then use:
 
----
-
-## Observability
-
-| Service | URL | Purpose |
-|---------|-----|---------|
-| liteparse-paddle | `http://localhost:5000` | Document parsing API |
-| PaddleOCR | `http://localhost:8829` | Raw OCR endpoint |
-| Redis | `localhost:6379` | Cache + rate limiting |
-| Jaeger | `http://localhost:16686` | Trace distributed requests |
-| Prometheus | `http://localhost:9090` | Metrics |
-| Grafana | `http://localhost:3000` | Dashboards (login: `admin` / see `.env`) |
-
----
-
-## Supported formats
-
-| Category | Formats |
-|----------|---------|
-| PDF | `.pdf` |
-| Word | `.doc`, `.docx`, `.docm`, `.odt`, `.rtf` |
-| PowerPoint | `.ppt`, `.pptx`, `.pptm`, `.odp` |
-| Spreadsheets | `.xls`, `.xlsx`, `.xlsm`, `.ods`, `.csv`, `.tsv` |
-| Images | `.jpg`, `.jpeg`, `.png`, `.gif`, `.bmp`, `.tiff`, `.webp`, `.svg` |
-
-Office documents require LibreOffice, images require ImageMagick - both are installed inside the server container.
-
----
-
-## GPU acceleration
-
-The compose file defaults to CPU-only PaddleOCR for portability. To enable GPU:
-
-**1.** Edit `python/Dockerfile` - change the pip index to CUDA:
-```dockerfile
-RUN pip install --no-cache-dir \
-    --extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cuda12/ \
-    paddlepaddle>=3.3.0 \
-    ...
+```text
+https://liteparse-paddle.localhost
 ```
 
-**2.** Uncomment the `deploy` block in `compose.yaml` under the `paddle-ocr` service.
+## Updating
 
-**3.** Rebuild and restart:
+This repo now has one real runtime codepath.
+
+### Upstream references
+
+- `~/Codes/liteparse` - keep this updated for the Rust crate and CLI reference
+- `~/Codes/liteparse-server` - keep this only as API/reference material if you want
+
+### Actual runtime repo
+
+- `~/Codes/liteparse-paddle` - this repo is the maintained product
+
+### Typical update flow
+
 ```bash
-docker compose build paddle-ocr
+cd ~/Codes/liteparse
+git fetch --tags
+git checkout crates-v2.0.2
+
+cd ~/Codes/liteparse-paddle
+cargo build --release --no-default-features
+docker compose build --no-cache
 docker compose up -d
 ```
 
----
+If you change the server code, the files that matter are:
 
-## Updating from upstream
+- `src/main.rs`
+- `Cargo.toml`
+- `Dockerfile`
+- `compose.yaml`
 
-This repo vendors source from three upstream projects. Patch points are minimal:
+## Future Extension: VLM / Markdown Output
 
-### liteparse-server
+The current OCR contract is still text + bounding boxes, which is the right fit for LiteParse.
 
-```bash
-# The only changed file is server/src/utils.ts (ocrServerUrl default)
-# 1. Copy new upstream files
-cp -r ../liteparse-server/src/* server/src/
-cp ../liteparse-server/package.json server/
-# 2. Re-apply the ocrServerUrl injection in server/src/utils.ts
-```
+If you want structure-aware markdown later:
 
-### PaddleOCR server wrapper
+- keep `paddle-ocr` as the default OCR sidecar for normal parsing
+- add a second sidecar or endpoint for PaddleOCR-VL / PP-Structure-style output
+- expose that as a separate route rather than mixing it into `/parse`
 
-```bash
-cp ../liteparse/ocr/paddleocr/server.py python/
-```
-
----
+That keeps the fast text extractor stable while leaving room for a richer markdown/VLM path later.
 
 ## License
 
@@ -285,6 +292,5 @@ Apache-2.0
 
 ## Credits
 
-- [LiteParse](https://github.com/run-llama/liteparse) by LlamaIndex - document parsing engine
-- [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) by Baidu - OCR engine (v3.5.0, PP-OCRv5)
-- [liteparse-server](https://github.com/run-llama/liteparse-server) by LlamaIndex - Express wrapper
+- [LiteParse](https://github.com/run-llama/liteparse)
+- [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR)

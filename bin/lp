@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+file=""
+format="text"
+ocr_lang=""
+dpi=""
+password=""
+pages=""
+max_pages=""
+preserve_small=""
+no_bbox=""
+no_ocr=""
+output_file=""
+screenshots=""
+batch_dir=""
+batch_out=""
+recursive=""
+ext_filter=""
+quiet=""
+show_help=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) show_help=1; shift ;;
+    -j|--json) format="json"; shift ;;
+    -f|--format) format="$2"; shift 2 ;;
+    -n|--no-ocr) no_ocr=1; shift ;;
+    -l|--ocr-language) ocr_lang="$2"; shift 2 ;;
+    -d|--dpi) dpi="$2"; shift 2 ;;
+    -p|--password) password="$2"; shift 2 ;;
+    -s|--pages) pages="$2"; shift 2 ;;
+    -m|--max-pages) max_pages="$2"; shift 2 ;;
+    -o|--output) output_file="$2"; shift 2 ;;
+    --preserve-small) preserve_small=1; shift ;;
+    --no-bbox) no_bbox=1; shift ;;
+    --screenshots) screenshots="${2:-screenshots}"; shift 2 ;;
+    -q|--quiet) quiet=1; shift ;;
+    --batch) batch_dir="$2"; batch_out="$3"; shift 3 ;;
+    --recursive) recursive=1; shift ;;
+    --ext) ext_filter="$2"; shift 2 ;;
+    *) file="$1"; shift ;;
+  esac
+done
+
+if [[ -n "$show_help" ]]; then
+  echo "Usage: lp [options] <file>"
+  echo ""
+  echo "Parse any document with PaddleOCR (PDF, DOCX, XLSX, PPTX, CSV, TSV, RTF,"
+  echo "images: JPG, PNG, GIF, BMP, TIFF, WebP, SVG)"
+  echo ""
+  echo "Output flags:"
+  echo "  -f, --format <fmt>     Output format: text (default) or json"
+  echo "  -j, --json             Shortcut for --format json"
+  echo "  -o, --output <file>    Save output to file"
+  echo ""
+  echo "OCR flags:"
+  echo "  -n, --no-ocr           Disable OCR entirely"
+  echo "  -l, --ocr-language <l> OCR language (default: en)"
+  echo ""
+  echo "Page flags:"
+  echo "  -d, --dpi <n>          Rendering DPI (default: 150)"
+  echo "  -s, --pages <pages>    Pages to extract, e.g. \"1-5,10\""
+  echo "  -m, --max-pages <n>    Max pages to parse"
+  echo "  --preserve-small       Preserve very small text"
+  echo "  --no-bbox              Disable precise bounding boxes"
+  echo ""
+  echo "Security flags:"
+  echo "  -p, --password <pass>  Password for encrypted documents"
+  echo ""
+  echo "Screenshot:"
+  echo "  --screenshots [dir]    Save page screenshots (default: ./screenshots)"
+  echo ""
+  echo "Batch:"
+  echo "  --batch <dir> <out>    Parse all supported files in a directory"
+  echo "  --recursive            Walk subdirectories (with --batch)"
+  echo "  --ext <.ext>           File extension filter (with --batch)"
+  echo ""
+  echo "Other:"
+  echo "  -q, --quiet            Suppress output"
+  echo "  -h, --help             Show this help"
+  echo ""
+  echo "Examples:"
+  echo "  lp doc.pdf                            Plain text output"
+  echo "  lp -j doc.pdf                         JSON output"
+  echo "  lp -l zh scanned.pdf                  Chinese OCR"
+  echo "  lp -s \"1-5,10\" doc.pdf               Specific pages"
+  echo "  lp -n native.pdf                      No OCR (native-text PDF)"
+  echo "  lp -o result.txt doc.pdf              Save to file"
+  echo "  lp --screenshots doc.pdf              Generate page screenshots"
+  echo "  lp --batch . ./output                 Parse all docs in current dir"
+  echo "  lp --batch . ./output --recursive     Walk subdirs"
+  echo "  lp --batch . ./output --ext .pdf      PDFs only"
+  exit 0
+fi
+
+config_parts=()
+if [[ -n "$no_ocr" ]]; then config_parts+=('"ocrEnabled":false'); fi
+if [[ -n "$ocr_lang" ]]; then config_parts+=('"ocrLanguage":"'"$ocr_lang"'"'); fi
+if [[ -n "$dpi" ]]; then config_parts+=('"dpi":'"$dpi"); fi
+if [[ -n "$password" ]]; then config_parts+=('"password":"'"$password"'"'); fi
+if [[ -n "$pages" ]]; then config_parts+=('"targetPages":"'"$pages"'"'); fi
+if [[ -n "$max_pages" ]]; then config_parts+=('"maxPages":'"$max_pages"); fi
+if [[ -n "$preserve_small" ]]; then config_parts+=('"preserveVerySmallText":true'); fi
+if [[ -n "$no_bbox" ]]; then config_parts+=('"preciseBoundingBox":false'); fi
+
+config_json=""
+if [[ ${#config_parts[@]} -gt 0 ]]; then
+  config_json=$(IFS=,; echo '{'"${config_parts[*]}"'}')
+fi
+
+if [[ -n "$batch_dir" ]]; then
+  find_cmd="find \"$batch_dir\" -type f"
+  if [[ -z "$recursive" ]]; then
+    find_cmd="$find_cmd -maxdepth 1"
+  fi
+  if [[ -n "$ext_filter" ]]; then
+    find_cmd="$find_cmd -name \"*${ext_filter}\""
+  else
+    find_cmd="$find_cmd \( -name \"*.pdf\" -o -name \"*.doc\" -o -name \"*.docx\" -o -name \"*.docm\" -o -name \"*.dot\" -o -name \"*.dotm\" -o -name \"*.dotx\" -o -name \"*.odt\" -o -name \"*.ott\" -o -name \"*.ppt\" -o -name \"*.pptx\" -o -name \"*.pptm\" -o -name \"*.pot\" -o -name \"*.potm\" -o -name \"*.potx\" -o -name \"*.odp\" -o -name \"*.otp\" -o -name \"*.xls\" -o -name \"*.xlsx\" -o -name \"*.xlsm\" -o -name \"*.xlsb\" -o -name \"*.ods\" -o -name \"*.ots\" -o -name \"*.csv\" -o -name \"*.tsv\" -o -name \"*.jpg\" -o -name \"*.jpeg\" -o -name \"*.png\" -o -name \"*.gif\" -o -name \"*.bmp\" -o -name \"*.tiff\" -o -name \"*.tif\" -o -name \"*.webp\" -o -name \"*.svg\" -o -name \"*.rtf\" -o -name \"*.pages\" -o -name \"*.key\" -o -name \"*.numbers\" \)"
+  fi
+
+  mkdir -p "$batch_out"
+  count=0
+  eval "$find_cmd" | while IFS= read -r f; do
+    count=$((count + 1))
+    ext="${f##*.}"
+    base="${f##*/}"
+    base="${base%.*}"
+    outpath="$batch_out/$base.txt"
+    if [[ "$format" == "json" ]]; then outpath="$batch_out/$base.json"; fi
+
+    if [[ -z "$quiet" ]]; then
+      echo "[$count] $base.$ext -> $outpath"
+    fi
+
+    if [[ -n "$config_json" ]]; then
+      if [[ "$format" == "json" ]]; then
+        curl -s -X POST http://localhost:5000/parse -F "file=@$f" -F "config=$config_json" > "$outpath"
+      else
+        curl -s -X POST "http://localhost:5000/parse?text=true" -F "file=@$f" -F "config=$config_json" > "$outpath"
+      fi
+    else
+      if [[ "$format" == "json" ]]; then
+        curl -s -X POST http://localhost:5000/parse -F "file=@$f" > "$outpath"
+      else
+        curl -s -X POST "http://localhost:5000/parse?text=true" -F "file=@$f" > "$outpath"
+      fi
+    fi
+  done
+  exit 0
+fi
+
+if [[ -z "$file" ]]; then
+  echo "Error: no file specified. Use -h for help." >&2
+  exit 2
+fi
+
+if [[ -n "$screenshots" ]]; then
+  mkdir -p "$screenshots"
+  echo "Saving screenshots to $screenshots/" >&2
+  sc_url="http://localhost:5000/screenshots"
+  if [[ -n "$pages" ]]; then sc_url="$sc_url?pages=$pages"; fi
+
+  if [[ -n "$config_json" ]]; then
+    curl -s -X POST "$sc_url" -F "file=@$file" -F "config=$config_json"
+  else
+    curl -s -X POST "$sc_url" -F "file=@$file"
+  fi | while IFS= read -r line; do
+    if [[ -n "$line" ]]; then
+      printf '%s' "$line" | LP_SCREENSHOTS_DIR="$screenshots" python3 -c '
+import sys, json, base64, os
+d = json.load(sys.stdin)
+screenshots_dir = os.environ["LP_SCREENSHOTS_DIR"]
+out = os.path.join(screenshots_dir, "page_" + str(d["page_number"]) + ".png")
+with open(out, "wb") as f:
+    f.write(base64.b64decode(d["data"]))
+print("  page " + str(d["page_number"]) + ": " + out)
+' 2>/dev/null
+    fi
+  done
+  exit 0
+fi
+
+url="http://localhost:5000/parse"
+if [[ "$format" != "json" ]]; then
+  url="$url?text=true"
+fi
+
+if [[ -n "$output_file" ]]; then
+  if [[ -n "$config_json" ]]; then
+    curl -s -X POST "$url" -F "file=@$file" -F "config=$config_json" > "$output_file"
+  else
+    curl -s -X POST "$url" -F "file=@$file" > "$output_file"
+  fi
+  echo "Saved to $output_file"
+else
+  if [[ -n "$config_json" ]]; then
+    curl -s -X POST "$url" -F "file=@$file" -F "config=$config_json"
+  else
+    curl -s -X POST "$url" -F "file=@$file"
+  fi
+  echo ""
+fi

@@ -3,34 +3,194 @@
 </p>
 
 <p align="center">
-  <em>A local document parsing server. PaddleOCR does the OCR. LiteParse v2 does the parsing. One `docker compose up`.</em>
+  <em><b>Local document parsing, no cloud.</b> PaddleOCR handles the OCR. LiteParse v2 extracts the text. Rust server on port 5000. Docker Compose. That's it.</em>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/rust-liteparse%20v2-000000?style=flat-square&logo=rust&logoColor=white"/>
-  <img src="https://img.shields.io/badge/http-axum-7c3aed?style=flat-square"/>
-  <img src="https://img.shields.io/badge/ocr-paddleocr-orange?style=flat-square&logo=python&logoColor=white"/>
-  <img src="https://img.shields.io/badge/docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white"/>
+  <img src="https://img.shields.io/badge/engine-liteparse%20v2%20(rust)-000000?style=flat-square&logo=rust&logoColor=white"/>
+  <img src="https://img.shields.io/badge/ocr-paddleocr%20pp--ocrv5-orange?style=flat-square&logo=python&logoColor=white"/>
+  <img src="https://img.shields.io/badge/109-languages-22c55e?style=flat-square"/>
+  <img src="https://img.shields.io/badge/gpu-cuda%20ready-06b6d4?style=flat-square"/>
+  <img src="https://img.shields.io/badge/runtime-docker%20compose-2496ED?style=flat-square&logo=docker&logoColor=white"/>
   <img src="https://img.shields.io/badge/license-Apache--2.0-3b82f6?style=flat-square"/>
 </p>
 
 <p align="center">
-  <a href="#quick-start"><b>Quick Start</b></a> •
-  <a href="#who-is-this-for"><b>Who For</b></a> •
-  <a href="#api"><b>API</b></a> •
-  <a href="#host-cli"><b>CLI</b></a> •
-  <a href="#speed-server-vs-cli"><b>Speed</b></a> •
-  <a href="#after-reboot"><b>Auto-start</b></a> •
-  <a href="#updating"><b>Updating</b></a>
-</p>
-
-<p align="center">
-  <b>PDF</b> • <b>DOCX</b> • <b>XLSX</b> • <b>PPTX</b> • <b>Images</b>
+  <b>PDF</b> • <b>DOCX</b> • <b>XLSX</b> • <b>PPTX</b> • <b>ODT</b> • <b>ODS</b> • <b>ODP</b> • <b>CSV</b> • <b>TSV</b> • <b>RTF</b> • <b>PNG</b> • <b>JPG</b> • <b>SVG</b> • <b>TIFF</b>
 </p>
 
 ---
 
+## Table of Contents
+
+- [What Is This?](#what-is-this)
+- [The Problem It Solves](#the-problem-it-solves)
+- [What You Need](#what-you-need)
+- [Quick Start](#quick-start)
+- [How It Works](#how-it-works)
+  - [The Two Containers](#the-two-containers)
+  - [What OCR Means (And When It Runs)](#what-ocr-means-and-when-it-runs)
+  - [What Happens To Your File](#what-happens-to-your-file)
+  - [What You Get Back](#what-you-get-back)
+- [API Reference](#api-reference)
+  - [POST /parse](#post-parse)
+  - [POST /screenshots](#post-screenshots)
+  - [GET /health](#get-health)
+  - [Supported File Types](#supported-file-types)
+- [Config Options](#config-options)
+  - [Common Recipes](#common-recipes)
+- [Three Ways To Use It](#three-ways-to-use-it)
+  - [curl (The API)](#curl-the-api)
+  - [lp (The Shell Wrapper)](#lp-the-shell-wrapper)
+  - [lit (The Rust CLI)](#lit-the-rust-cli)
+- [Speed: Server vs CLI](#speed-server-vs-cli)
+- [Making It Auto-Start On Boot](#making-it-auto-start-on-boot)
+  - [systemd (Recommended)](#systemd-recommended)
+  - [Portless (Nicer URL)](#portless-nicer-url)
+- [GPU Acceleration](#gpu-acceleration)
+- [How To Update](#how-to-update)
+- [Troubleshooting](#troubleshooting)
+- [Future: VLM and Markdown](#future-vlm-and-markdown)
+- [License](#license)
+- [Credits](#credits)
+
+---
+
+## What Is This?
+
+**At a glance:**
+
+| | |
+|---|---|
+| What it does | Extracts text from documents. PDFs, Word docs, spreadsheets, slides, images. |
+| How you use it | You send it a file through HTTP. It sends back the text. |
+| Where it runs | On your machine. Not in the cloud. Your files don't leave your computer. |
+| OCR engine | PaddleOCR PP-OCRv5. 109 languages. Beats Tesseract on real-world images. |
+| Parser engine | LiteParse v2. Rust. Reads native text from PDFs, merges it with OCR output, preserves layout. |
+| Server | Rust + axum. Port 5000. About 15MB of RAM idle. |
+| Install style | `docker compose up -d`. Two containers. That's the whole setup. |
+| Cost | Free. No API keys. No accounts. No usage limits. |
+
+You install it once. It runs quietly in the background. Any program on your machine that can make an HTTP request can ask it to parse a document. Shell scripts, Python notebooks, Obsidian plugins, AI agent toolchains, whatever you're building.
+
+Under the hood: two Docker containers. One runs a Rust HTTP server bolted onto the LiteParse v2 library (the thing that actually reads documents). The other runs a Python OCR service using PaddleOCR's PP-OCRv5 model. When a page has no readable text on it (a scan, a photo, an embedded chart), the parser sends it to PaddleOCR, gets back text with coordinates, and merges it into the output. Pages with native text skip OCR entirely, so a 200-page textbook parses in seconds.
+
+---
+
+## The Problem It Solves
+
+Most document parsers live in the cloud. You upload a file, somebody else's server reads it, and you get text back. That's fine for some things, but it's slow (network roundtrips), it costs money (API fees), and it leaks data (your documents leave your machine).
+
+This project does the same job locally. Your files never leave your computer. There's no usage limit and no monthly bill. Parse a thousand-page PDF once or a hundred times, it costs the same: zero.
+
+It also swaps in PaddleOCR instead of the more common Tesseract. PaddleOCR is more accurate on real-world images, handwriting, and non-English text. The tradeoff is that it's bigger (about 2GB of RAM for the models) and runs in a separate container. For most local machines that's fine. For a 4GB laptop, it's tight.
+
+---
+
+## What You Need
+
+Every setup needs these. We cover variations (no Docker, no Git, low RAM, GPU vs CPU) below.
+
+| Requirement | Minimum | Recommended | Why |
+|------------|---------|-------------|-----|
+| Docker | 20.10+ | 27+ | Runs the containers |
+| Docker Compose | v2 (plugin) | v2 | Orchestrates both containers with one command |
+| Git | Any | Latest | To clone the repo. You can skip this by downloading the zip from GitHub |
+| Disk space | 4 GB | 6 GB | Container images + PaddleOCR model downloads |
+| RAM | 3 GB | 8 GB | PaddleOCR uses about 2GB for models. The parser server uses about 15MB |
+| Terminal | Any shell | bash or zsh | For typing the commands |
+| OS | Any that runs Docker | Linux, macOS, Windows (WSL2) | Docker runs on all three |
+
+### If you don't have Docker
+
+**Linux (Ubuntu/Debian):**
+```bash
+sudo apt update && sudo apt install docker.io docker-compose-v2
+sudo usermod -aG docker $USER
+# Log out and back in for the group change to take effect
+```
+
+**Linux (Arch):**
+```bash
+sudo pacman -S docker docker-compose
+sudo systemctl enable --now docker
+sudo usermod -aG docker $USER
+# Log out and back in
+```
+
+**macOS:**
+Install [Docker Desktop](https://www.docker.com/products/docker-desktop/). It includes Docker, Docker Compose, and a GUI. Download the `.dmg`, drag to Applications, open it. Wait for the whale icon to stop animating.
+
+**Windows:**
+Install [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop/). It needs WSL2 (Windows Subsystem for Linux), which the installer sets up for you. After install, open Docker Desktop and wait for it to finish starting.
+
+### If you don't have Git
+
+Download the repo as a zip file:
+
+```bash
+curl -L https://github.com/WhiteHades/liteparse-paddle/archive/refs/heads/main.zip -o liteparse-paddle.zip
+unzip liteparse-paddle.zip
+cd liteparse-paddle-main
+docker compose build --no-cache
+docker compose up -d
+```
+
+Or install Git:
+- Linux: `sudo apt install git` (Ubuntu/Debian) or `sudo pacman -S git` (Arch)
+- macOS: `brew install git` or comes with Xcode Command Line Tools
+- Windows: [git-scm.com](https://git-scm.com/download/win)
+
+### If you have limited RAM (under 5 GB)
+
+PaddleOCR needs about 2GB. If your machine is tight:
+
+**Option 1: Skip OCR entirely and use the Rust CLI.**
+You don't need Docker at all. Just the parser, no OCR:
+
+```bash
+cargo install liteparse
+lit parse document.pdf
+```
+
+This uses about 50MB of RAM. Fast. No OCR. Good for native-text PDFs.
+
+**Option 2: Run the server but disable OCR for individual requests.**
+Start the full server, but send `"ocrEnabled": false` in your parse requests:
+
+```bash
+curl -X POST "http://localhost:5000/parse?text=true" \
+  -F "file=@document.pdf" \
+  -F 'config={"ocrEnabled":false}'
+```
+
+OCR won't run, so RAM stays low. Best when you only occasionally need OCR.
+
+### If you want GPU (CUDA)
+
+The default is CPU. GPU is optional. You need:
+
+1. An NVIDIA GPU with CUDA support
+2. [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) installed
+3. A few config changes (documented in the [GPU Acceleration](#gpu-acceleration) section)
+
+CPU-only PaddleOCR handles a page in about 1-3 seconds. GPU brings that down to 200-500ms. For most one-off use, CPU is fine.
+
+### Quick sanity check
+
+After installing Docker, verify it works:
+
+```bash
+docker run hello-world
+```
+
+If you see "Hello from Docker!", you're ready.
+
+---
+
 ## Quick Start
+
+Four commands:
 
 ```bash
 git clone https://github.com/WhiteHades/liteparse-paddle
@@ -39,100 +199,95 @@ docker compose build --no-cache
 docker compose up -d
 ```
 
-Now parse something:
+What each one does:
+
+1. `git clone` downloads the code to your machine.
+2. `cd` moves you into the project folder.
+3. `docker compose build` builds the Docker image. This takes a few minutes the first time because it installs LibreOffice and ImageMagick inside the container.
+4. `docker compose up -d` starts the server in the background. `-d` means "detached": it runs without taking over your terminal.
+
+After those four commands, parse a document:
 
 ```bash
 curl -X POST "http://localhost:5000/parse?text=true" \
   -F "file=@document.pdf"
 ```
 
-Two services. That's the whole stack:
+The first request to PaddleOCR will be slow (about 30 seconds). It's downloading the language models. Subsequent requests are fast.
 
-- `liteparse-server` (port 5000): a Rust HTTP server wrapped around the LiteParse crate
-- `paddle-ocr` (port 8829): a Python FastAPI server running PP-OCRv5
+To stop it: `docker compose down`.
 
-The first build takes a few minutes. It pulls down LibreOffice and ImageMagick inside the server container so non-PDF formats work. The first OCR request is slow too. PaddleOCR downloads its language models when it first sees a request. After that, everything is fast.
+---
 
-No `.env` file needed. No API keys. Nothing to configure.
+## How It Works
 
-## Architecture
+### The Two Containers
 
-```text
-you (curl / lp / script)
-  -> POST :5000/parse or :5000/screenshots
-  -> Rust axum server (liteparse-server)
-  -> LiteParse Rust crate (v2.0.2)
-  -> when OCR is needed: POST :8829/ocr
-  -> PaddleOCR (PP-OCRv5, 109 languages)
-  -> text + bounding boxes come back
-  -> server merges OCR results into the parsed document
-  -> response goes back to you
-```
+Docker containers are like lightweight virtual machines. Each one runs a single program in its own isolated environment. This project has two:
 
-Why two containers instead of one? OCR is the heavy lift. PaddleOCR model weights are about 150MB per language. By keeping them in a separate container, the parser server stays small and fast. The OCR container only wakes up when a page actually needs it. And if you want to swap in a different OCR engine later, you only touch one container.
+**liteparse-server (port 5000)**
+This is the front door. A Rust program that listens for HTTP requests. When you send it a file, it hands the file to the LiteParse library (also Rust, also fast) which pulls out the text. If a page needs OCR, this server calls the PaddleOCR container.
 
-Why this repo instead of upstream? LiteParse v2 is now Rust (fast), but the crate doesn't ship with an HTTP server. It also defaults to Tesseract for OCR, which is fine but less accurate than PaddleOCR on real-world images. This repo bolts an HTTP layer onto the Rust parser and swaps in PaddleOCR as the default OCR backend.
+**paddle-ocr (port 8829)**
+A Python server that runs the PP-OCRv5 model. It only wakes up when a page needs OCR. The parser server sends it an image, it returns the text with coordinates and confidence scores.
 
-## Who Is This For?
+Why split them? OCR is the heavy part. Model weights are big. By keeping them in a separate container, the parser stays small and fast when OCR isn't needed. And if you want to swap PaddleOCR for a different OCR engine later, you only touch one container.
 
-**You likely want this if:**
+### What OCR Means (And When It Runs)
 
-- You need a local document parser with an HTTP API. Nothing cloud-dependent. Everything runs on your machine.
-- Your scripts, editors, or AI agent pipelines need to read PDFs, DOCX files, PPTX decks, spreadsheets, or images.
-- You want better OCR than Tesseract without paying for a cloud OCR service. PaddleOCR's PP-OCRv5 model consistently beats Tesseract on noisy images, handwriting, and non-English text.
-- You understand Docker and don't mind a one-time `docker compose up` setup.
+OCR stands for Optical Character Recognition. It's the process of looking at an image and finding text in it. Like when you take a photo of a page and your phone can copy the text.
 
-**You can probably skip this if:**
+Not every page needs it. Native PDFs (where you can select and copy text with your mouse) already have the text embedded. The parser reads that directly. OCR only fires on:
 
-- You just want to parse a PDF once. Install `cargo install liteparse` and run `lit parse file.pdf`. That's faster for one-offs and needs no Docker at all.
-- You're building a SaaS that processes millions of documents. This is a single-machine local server. It doesn't scale horizontally, doesn't queue requests, doesn't distribute work.
-- Your machine is tight on RAM. PaddleOCR pulls about 2GB for its models at runtime. If you're on a 4GB laptop, this might not fit alongside your browser.
+- Pages with very little native text (under about 100 characters)
+- Images embedded inside documents
+- Scans, screenshots, photos of documents
 
-This is a developer tool for local automation. If you find yourself typing `curl :5000/parse` a lot, or writing shell scripts that call it, you're the target audience.
+This is why a 200-page textbook (native text) parses in seconds, but a 200-page scanned PDF takes longer: every page needs OCR.
 
-## How To Use It (In Plain English)
+### What Happens To Your File
 
-You upload a file, the server hands it to the LiteParse engine, the engine figures out if any pages need OCR, calls PaddleOCR only for those pages, merges the OCR text with the rest of the document, and sends you back structured text or JSON.
+When you upload a file:
 
-### What "needs OCR" means
+1. The server writes it to a temporary file on disk, keeping the original extension (`.pdf`, `.docx`, `.png`, etc.)
+2. It passes the temp file path to the LiteParse engine
+3. The engine reads the file. If it's a PDF, it uses a built-in PDF reader. If it's anything else, it calls LibreOffice or ImageMagick (inside the container) to convert it to a PDF first
+4. The engine checks each page. Pages with enough native text get read directly. Sparse pages or embedded images get sent to PaddleOCR for OCR
+5. The OCR results (when there are any) get merged back into the document text
+6. The server sends the result back to you
+7. The temp file gets cleaned up
 
-Not every page triggers OCR. Native-text PDFs (where you can select and copy text) already have the text embedded. LiteParse reads that directly. OCR only fires on:
+No uploaded file stays on disk.
 
-- Pages with very little native text (less than about 100 characters)
-- Embedded images inside documents
-- Screenshots, scans, photos of documents
+### What You Get Back
 
-This saves a lot of time. A 200-page textbook that is mostly native text will parse in seconds. A 200-page scanned PDF will take longer because every page needs OCR.
+In **text mode** (`?text=true`): a single string containing the whole document. Text is laid out roughly as it appears on the page. Easy to pipe into other commands or save to a file.
 
-### What you get back
+In **JSON mode** (default): one JSON object per page. Each page has its text, plus a list of every text element with pixel-level coordinates, font names, font sizes, and OCR confidence scores (when OCR ran on that element). Use this when you need to know where things are on the page, not just what they say.
 
-In text mode (`?text=true`): one string, the full document text, laid out close to how it appears on the page.
+---
 
-In JSON mode (default): structured data per page. Coordinates for every text element, font info, OCR confidence scores. Useful if you're building something that needs to know where on the page each word sits.
+## API Reference
 
-### What happens to your file
+### POST /parse
 
-The server writes uploads to a temp file (with the original extension, so LibreOffice knows how to handle DOCX vs PDF vs PNG), then passes the temp path to the LiteParse engine. When the request finishes, the temp file gets cleaned up. No file stays on disk.
+The main endpoint. Send it a file, get text or JSON back.
 
-## API
-
-### `POST /parse`
-
-**Plain text:**
+**Text output:**
 
 ```bash
 curl -X POST "http://localhost:5000/parse?text=true" \
   -F "file=@document.pdf"
 ```
 
-**JSON (default):**
+**JSON output (default):**
 
 ```bash
 curl -X POST http://localhost:5000/parse \
   -F "file=@document.pdf"
 ```
 
-**With OCR options:**
+**With options:**
 
 ```bash
 curl -X POST http://localhost:5000/parse \
@@ -140,150 +295,203 @@ curl -X POST http://localhost:5000/parse \
   -F 'config={"ocrLanguage":"zh","dpi":200}'
 ```
 
-**Config fields you can set:**
+The `config` field takes a JSON object with any of the options from the [Config Options](#config-options) table below.
 
-| Field | Type | Default | What it does |
-|-------|------|---------|-------------|
-| `ocrLanguage` | string | `en` | OCR language code (2-letter PaddleOCR format) |
-| `ocrEnabled` | bool | `true` | Set to `false` to skip OCR entirely |
-| `ocrServerUrl` | string | from env | Override OCR endpoint (defaults to PaddleOCR) |
-| `dpi` | float | `150` | Rendering DPI for OCR and screenshots |
-| `maxPages` | number | `1000` | Max pages to process |
-| `targetPages` | string | `null` | Specific pages, e.g. `"1-5,10,15-20"` |
-| `password` | string | `null` | Password for encrypted PDFs |
-| `preserveVerySmallText` | bool | `false` | Keep tiny text that would normally get filtered out |
-| `quiet` | bool | `false` | Suppress progress output |
-| `numWorkers` | number | CPUs-1 | Concurrent OCR workers |
+### POST /screenshots
 
-The field `preciseBoundingBox` is accepted and ignored. It exists so older `lp` scripts don't break.
-
-### `POST /screenshots`
+Renders pages as PNG images.
 
 ```bash
 curl -X POST "http://localhost:5000/screenshots?pages=1,2,3" \
   -F "file=@document.pdf"
 ```
 
-Returns NDJSON. One JSON object per line. Each line has `page_number`, `width`, `height`, and `data` (base64-encoded PNG).
+Returns NDJSON (newline-delimited JSON). Each line is a JSON object with:
 
-Pull the PNG out of a response line:
+- `page_number`: which page this is
+- `width` and `height`: image dimensions in pixels
+- `data`: the actual PNG, base64-encoded
+
+To save a page as a PNG file:
 
 ```bash
 curl -s :5000/screenshots?pages=1 -F "file=@doc.pdf" \
   | head -1 | jq -r '.data' | base64 -d > page1.png
 ```
 
-### `GET /health`
+The `lp` script (see below) does this for you with `lp --screenshots ./out doc.pdf`.
+
+### GET /health
 
 ```bash
 curl http://localhost:5000/health
 ```
 
-Returns `200` with an empty body.
+Returns `200` with no body. Use it in scripts to check if the server is alive.
 
-## Supported Formats
+### Supported File Types
 
-You can throw these at the server:
+| Category | Extensions | How it's handled |
+|----------|-----------|-----------------|
+| PDF | `.pdf` | Direct. Read by the built-in PDF engine |
+| Word | `.doc`, `.docx`, `.docm`, `.odt`, `.rtf` | Converted to PDF by LibreOffice |
+| PowerPoint | `.ppt`, `.pptx`, `.pptm`, `.odp` | Converted to PDF by LibreOffice |
+| Excel | `.xls`, `.xlsx`, `.xlsm`, `.ods`, `.csv`, `.tsv` | Converted to PDF by LibreOffice |
+| Images | `.jpg`, `.jpeg`, `.png`, `.gif`, `.bmp`, `.tiff`, `.webp`, `.svg` | Converted to PDF by ImageMagick |
 
-| Category | Extensions |
-|----------|-----------|
-| PDF | `.pdf` |
-| Word | `.doc`, `.docx`, `.docm`, `.odt`, `.rtf` |
-| PowerPoint | `.ppt`, `.pptx`, `.pptm`, `.odp` |
-| Excel | `.xls`, `.xlsx`, `.xlsm`, `.ods`, `.csv`, `.tsv` |
-| Images | `.jpg`, `.jpeg`, `.png`, `.gif`, `.bmp`, `.tiff`, `.webp`, `.svg` |
+All the conversion tools (LibreOffice, ImageMagick) live inside the Docker container. You don't need them on your host machine.
 
-Office formats go through LibreOffice inside the container. Images go through ImageMagick. Both are installed in the server image, so you don't need either on your host machine.
+There's one gotcha with images. Debian's ImageMagick blocks PDF conversion by default (a security policy). The Dockerfile opens that policy so images work. If you run the server outside Docker, you'll need to do the same on your host.
 
-For images, there is one gotcha. ImageMagick on Debian blocks PDF conversion by default (a security policy). The Dockerfile opens that policy so image-to-PDF roundtrips work. If you're running the server outside Docker, you'll need the same policy change on your host ImageMagick.
+---
 
-## Speed: Server vs Direct CLI
+## Config Options
 
-Both use the same Rust engine. The only difference is how you reach it.
+All of these go inside the `config` JSON field when calling `/parse` or `/screenshots`.
 
-Tested on a 260KB one-page PDF, both already warm:
+| Field | Type | Default | What it does |
+|-------|------|---------|-------------|
+| `ocrLanguage` | string | `en` | Which language PaddleOCR should use. 2-letter codes: `en`, `zh`, `ja`, `ko`, `fr`, etc. |
+| `ocrEnabled` | bool | `true` | Set to `false` to skip OCR on all pages. Good for native-text PDFs where you know OCR isn't needed. |
+| `ocrServerUrl` | string | from env | Send OCR to a different server. If empty, uses PaddleOCR at `:8829`. |
+| `dpi` | float | `150` | How sharp to render pages for OCR. Higher = more accurate = slower. |
+| `maxPages` | number | `1000` | Stop after this many pages. |
+| `targetPages` | string | `null` | Only process specific pages. Format: `"1-5,10,15-20"`. |
+| `password` | string | `null` | Password for encrypted/protected PDFs. |
+| `preserveVerySmallText` | bool | `false` | Keep footnote-sized text that would normally get filtered out. |
+| `quiet` | bool | `false` | Don't print progress dots to the server log. |
+| `numWorkers` | number | CPUs-1 | How many OCR tasks to run in parallel. Default is all your CPU cores minus one. |
 
-| Method | Time | What happens |
-|--------|------|-------------|
-| `lit parse file.pdf` (CLI) | 13ms | Binary reads file, parses, prints text, exits |
-| `curl :5000/parse` (server) | 20ms | HTTP request + multipart parsing + temp file write + parse + response |
+The field `preciseBoundingBox` is accepted and silently ignored. Old versions of the `lp` script send it, and the server just nods politely and carries on.
 
-The 7ms gap is the HTTP plumbing. For a file this small, the network roundtrip is a noticeable fraction of the total. For a 5MB PDF, both take hundreds of milliseconds, and the HTTP overhead becomes a rounding error.
+### Common Recipes
 
-**When to use the CLI.** You're at a terminal, you have a file on disk, you want its text. `lit parse file.pdf`. Done. No Docker, no ports, no warmup.
+**Parse a scanned Chinese document quickly:**
 
-**When to use the server.** You want your scripts, your editor, or your AI agent to call parse without installing a Rust binary. You want OCR without configuring Tesseract. You want a stable HTTP endpoint that other tools can depend on.
+```bash
+curl -X POST http://localhost:5000/parse \
+  -F "file=@chinese-scan.pdf" \
+  -F 'config={"ocrLanguage":"zh","dpi":100}'
+```
 
-They complement each other. Use the CLI for quick one-off work. Keep the server running for automation.
+Lower DPI = faster. Acceptable for most text.
 
-## Host CLI
+**Parse a native-text PDF with no OCR at all:**
 
-### `lit` (Rust binary)
+```bash
+curl -X POST "http://localhost:5000/parse?text=true" \
+  -F "file=@textbook.pdf" \
+  -F 'config={"ocrEnabled":false}'
+```
 
-Install once:
+Skips the OCR check entirely. Fastest path possible through the server.
+
+**Parse only pages 5 through 20:**
+
+```bash
+curl -X POST http://localhost:5000/parse \
+  -F "file=@big-report.pdf" \
+  -F 'config={"targetPages":"5-20"}'
+```
+
+**Parse an image with high-quality OCR:**
+
+```bash
+curl -X POST http://localhost:5000/parse \
+  -F "file=@scan.jpg" \
+  -F 'config={"dpi":300,"preserveVerySmallText":true}'
+```
+
+Higher DPI catches small text. The `preserveVerySmallText` flag keeps footnotes and fine print.
+
+---
+
+## Three Ways To Use It
+
+### curl (The API)
+
+Works from any language, any tool, any script. Send an HTTP request, get text back. No installation needed beyond Docker running the server.
+
+```bash
+curl -X POST "http://localhost:5000/parse?text=true" \
+  -F "file=@document.pdf"
+```
+
+This is the most universal way. Python scripts, Node apps, shell scripts, cron jobs, all speak HTTP.
+
+### lp (The Shell Wrapper)
+
+A bash script shipped in this repo at `bin/lp`. It wraps curl with friendlier flags and handles screenshots and batch mode for you.
+
+Install it:
+
+```bash
+ln -sf "$(pwd)/bin/lp" ~/.local/bin/lp
+```
+
+Now:
+
+```bash
+lp doc.pdf                              # plain text
+lp -j doc.pdf                           # JSON
+lp -l zh scanned.pdf                    # Chinese OCR
+lp -s "1-5,10" doc.pdf                  # specific pages
+lp -d 200 doc.pdf                       # higher DPI
+lp --screenshots ./out doc.pdf          # save page images
+lp --batch ./in ./out                   # parse a whole directory
+lp --batch ./in ./out --recursive       # include subdirectories
+lp --batch ./in ./out --ext .pdf        # only PDFs
+lp -h                                   # full help
+```
+
+The server must be running for `lp` to work (it calls `localhost:5000`).
+
+### lit (The Rust CLI)
+
+This doesn't go through the server at all. It's the upstream LiteParse binary, installed separately:
 
 ```bash
 cargo install liteparse
 ```
 
-The binary is called `lit` (not `liteparse`; that's the crate name, the upstream authors picked a shorter binary). Verify:
+The installed binary is called `lit` (the crate name is `liteparse`, but the authors made the binary shorter).
 
 ```bash
-lit --version   # 2.0.2
+lit --version    # 2.0.2
 lit parse document.pdf
+lit parse document.pdf --ocr-server-url http://localhost:8829/ocr
 ```
 
-This skips the server entirely. The binary calls the LiteParse crate directly. No Docker, no HTTP, no ports. Fastest path for one-off parsing.
+The CLI is faster for one-off parsing. No Docker, no HTTP overhead. The tradeoff: you don't get PaddleOCR by default (the CLI uses Tesseract unless you point it at an OCR server).
 
-### `lp` (shell wrapper)
+**Which one should you use?** Use `lit` when you're at a terminal and just want the text from a file. Use `lp` (or curl) when you're writing a script or you want the server's full OCR pipeline. They do the same job, just through different doors.
 
-This repo ships a bash script at `bin/lp` that wraps curl calls to the server. It mirrors the upstream `lit` CLI flag names so it feels familiar:
+---
 
-```bash
-# Make it available on PATH
-ln -sf "$(pwd)/bin/lp" ~/.local/bin/lp
+## Speed: Server vs CLI
 
-# Now use it anywhere
-lp doc.pdf                       # text
-lp -j doc.pdf                    # JSON
-lp -l zh scanned.pdf             # Chinese OCR
-lp -s "1-5,10" doc.pdf           # specific pages
-lp --screenshots ./shots doc.pdf # save page images
-lp --batch ./in ./out            # parse a directory
-lp --batch ./in ./out --ext .pdf # PDFs only
-```
+Tested on a 260KB single-page PDF. Both already warm (no cold start penalty).
 
-Run `lp --help` for the full flag reference. The script sends everything to `localhost:5000`, so the Docker server needs to be running.
+| Method | Time | Why |
+|--------|------|-----|
+| `lit parse file.pdf` | 13ms | Binary reads file, parses, prints, exits |
+| `curl :5000/parse` | 20ms | HTTP roundtrip + multipart upload + parse + response |
 
-## PaddleOCR Sidecar
+The 7ms gap is the HTTP plumbing: network call, form data parsing, writing a temp file, serialising JSON. For a small file, that's noticeable. For a 5MB PDF, both methods take hundreds of milliseconds and the overhead disappears into the parsing time.
 
-The OCR server sits on port 8829 and you can talk to it directly:
+**Use the CLI** for quick one-off parsing. No Docker needed.
 
-```bash
-curl -X POST http://localhost:8829/ocr \
-  -F "file=@image.png" \
-  -F "language=en"
-```
+**Use the server** when you want OCR without fiddling with Tesseract config, or when you're building scripts and tools that depend on a stable HTTP endpoint.
 
-Returns text with bounding boxes and confidence scores. Any tool on your machine can use this endpoint. It's the upstream `liteparse/ocr/paddleocr/server.py` FastAPI server, unchanged.
+---
 
-Separating OCR from the parser means you can swap OCR backends later. Want to try EasyOCR? Spin up a different container on the same port shape. Want to add a VLM for markdown output? Add a second sidecar and a new route. The parser doesn't care what answers the OCR calls.
+## Making It Auto-Start On Boot
 
-## GPU
+### systemd (Recommended)
 
-CPU-only by default. PaddleOCR runs fine on CPU for most documents, just slower on image-heavy or scanned files.
+Docker containers die when your machine restarts. A systemd user unit brings them back.
 
-To turn on GPU:
-
-1. Change `python/Dockerfile` to pull the CUDA pip index: `--extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cuda12/`
-2. Uncomment the `deploy` block under `paddle-ocr` in `compose.yaml`
-3. Rebuild: `docker compose build paddle-ocr && docker compose up -d`
-
-You need the NVIDIA Container Toolkit installed on the host.
-
-## Making It Survive Reboots
-
-Docker containers die when the machine restarts. To bring everything back on boot, wire a systemd user unit:
+Create a service file:
 
 ```bash
 mkdir -p ~/.config/systemd/user
@@ -302,33 +510,61 @@ StandardOutput=journal
 [Install]
 WantedBy=default.target
 SERVICE
+```
 
+`%h` is systemd shorthand for your home directory. Change the path if you cloned the repo somewhere else.
+
+Turn it on:
+
+```bash
 loginctl enable-linger $USER
 systemctl --user daemon-reload
 systemctl --user enable --now liteparse-paddle.service
 ```
 
-Check it took:
+What these do:
+
+- `enable-linger` lets your user services stay alive even when you're not logged in.
+- `daemon-reload` tells systemd to read the new service file.
+- `enable --now` turns the service on and starts it immediately.
+
+Verify:
 
 ```bash
 systemctl --user status liteparse-paddle.service
 ```
 
-Change `%h/liteparse-paddle` in the unit to wherever you cloned the repo. After that, it'll start on every boot.
+Now it starts on every boot. To stop: `systemctl --user stop liteparse-paddle.service`.
 
-## Portless (named local URL)
+### Portless (Nicer URL)
 
-If you have [portless](https://github.com/WhiteHades/portless) installed:
+If you have [portless](https://github.com/WhiteHades/portless), give the server a named URL:
 
 ```bash
 portless alias liteparse-paddle 5000
 ```
 
-Now use `https://liteparse-paddle.localhost` instead of `localhost:5000`. Nicer for browser-based tools and API explorers.
+Now reach it at `https://liteparse-paddle.localhost` instead of `http://localhost:5000`. Nicer for tools and browsers.
 
-## Updating
+---
 
-### Server code
+## GPU Acceleration
+
+CPU-only by default. That works fine for most documents. PaddleOCR on CPU handles a page in about 1-3 seconds.
+
+On GPU it's faster (about 200-500ms per page). To switch:
+
+1. Open `python/Dockerfile`. Change the pip install line to pull from the CUDA index instead of CPU.
+2. Open `compose.yaml`. Uncomment the `deploy` block under the `paddle-ocr` service. This gives the container access to your GPU.
+3. Rebuild: `docker compose build paddle-ocr && docker compose up -d`
+
+You also need the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) installed on your host machine. Without it, Docker can't pass the GPU through to containers.
+
+---
+
+## How To Update
+
+### This server
 
 ```bash
 cd /path/to/liteparse-paddle
@@ -337,46 +573,99 @@ docker compose build --no-cache
 docker compose up -d
 ```
 
-### Looking at upstream
+The `--no-cache` flag makes Docker rebuild from scratch. Without it, Docker reuses old build steps and your update might not actually take effect.
 
-The upstream `liteparse` crate lives at `https://github.com/run-llama/liteparse`. Clone it if you want to track their releases. The tag `crust-v2.0.2` is what this server pins against right now.
+### The upstream parser
 
-## Future: VLM / Markdown
+The LiteParse library this repo depends on is maintained separately. If a new version comes out with improvements:
 
-Right now the OCR contract is text plus bounding boxes, which is what LiteParse expects. PaddleOCR also ships a newer model, PaddleOCR-VL, that outputs structured markdown (tables, formulas, heading hierarchy) instead of flat text.
+1. Update `Cargo.toml` to point at the newer version
+2. Rebuild: `docker compose build --no-cache`
+3. Test: `curl :5000/health && lp document.pdf`
 
-If you want that later:
+The upstream source is at [github.com/run-llama/liteparse](https://github.com/run-llama/liteparse). This server currently pins against the `crust-v2.0.2` release.
 
-- Keep the current `paddle-ocr` container as-is for normal parsing
-- Add a second sidecar for PaddleOCR-VL or PP-Structure
-- Expose it on its own route (e.g. `/parse-md`)
-- Leave `/parse` alone so the fast text path stays stable
+### The PaddleOCR server
 
-That way you get both: fast extraction for automation, rich structure when you need it.
+The `python/server.py` file is from the upstream LiteParse repo's PaddleOCR example. It rarely changes. If you want to update it:
+
+1. Pull the latest from `github.com/run-llama/liteparse/blob/main/ocr/paddleocr/server.py`
+2. Copy it over `python/server.py`
+3. Rebuild the OCR container: `docker compose build paddle-ocr && docker compose up -d`
+
+---
 
 ## Troubleshooting
 
-**"Parse error: unsupported file format"**
+### Server won't start
 
-The file extension matters. Make sure curl sends the right filename. If you renamed a PDF to `.bin`, the server won't know what to do with it.
+```bash
+docker compose logs liteparse-server
+```
 
-**"No 'file' field provided"**
+If you see `glibc` errors, the binary was compiled on a newer system than the Debian base image. Rebuild with `docker compose build --no-cache`. This compiles the Rust binary inside Docker where it matches the runtime environment.
 
-You forgot the `file=@` part of the curl command. Double-check the `-F "file=@path/to/doc.pdf"` syntax.
+### "Parse error: unsupported file format"
 
-**Server won't start**
+The file extension matters. If you renamed a PDF to `.bin` or used a generic temporary filename, the server doesn't know what kind of file it is. Send files with their actual extension. 
 
-Run `docker compose logs liteparse-server`. If you see glibc errors, the binary was compiled on a newer system than the container's Debian base. Rebuild with `docker compose build --no-cache`.
+The `lp` script handles this for you. If you're using curl directly, make sure the file path ends in a recognised extension from the [Supported File Types](#supported-file-types) table.
 
-**OCR isn't running on a page that needs it**
+### "No 'file' field provided"
 
-The server only fires OCR when native text is sparse (under about 100 characters). If a page has mostly text but a small embedded image, OCR won't run on the image portion. This is a LiteParse engine behaviour, not a server bug. For full OCR on every page regardless, set `"ocrEnabled": true` (already the default) and lower the threshold by not relying on native text detection: convert the input to an image first and send that.
+You're missing the `file=@` part of the curl command. The correct syntax:
+
+```bash
+curl -F "file=@/absolute/path/to/your.pdf"
+```
+
+Note the `@` symbol. It tells curl to read the file from disk and attach it to the request.
+
+### OCR isn't running on a page that seems to need it
+
+LiteParse skips OCR on pages that have more than about 100 characters of native text. This is usually what you want (native text is more accurate than OCR). But if a page has an embedded chart with labels that you need OCR'd, and the page otherwise has lots of native text, that chart won't get OCR'd.
+
+Workaround: convert the page to an image first, then send that image. An image always triggers OCR since it has no native text.
+
+### Image parsing fails with "not allowed by the security policy"
+
+This means ImageMagick's PDF policy is blocking image-to-PDF conversion. The Docker image fixes this in its build. If it's happening to you, check that you're running the container from this repo's Dockerfile (not a custom one that omits the policy fix).
+
+### Server returns empty or garbled text
+
+A few things to check:
+
+- Make sure PaddleOCR is healthy: `docker compose ps | grep paddle-ocr` should show "healthy"
+- Check that you're sending a file type the server understands (PDF, DOCX, image, etc.)
+- If the document is a scan, set a higher DPI: `'config={"dpi":300}'`
+- For non-English text, set the language: `'config={"ocrLanguage":"zh"}'`
+
+---
+
+## Future: VLM and Markdown
+
+The current OCR model (PP-OCRv5) outputs text with bounding boxes. That's what LiteParse expects. It works well for extracting raw text.
+
+PaddleOCR also ships a newer model, PaddleOCR-VL, that outputs structured markdown: tables as actual tables, formulas as LaTeX, headings with hierarchies. It's slower (it's a 0.9 billion parameter visual language model) and needs more RAM, but the output is richer.
+
+If you want that one day:
+
+- Keep the current `paddle-ocr` container running for fast text extraction
+- Add a second OCR container running PaddleOCR-VL
+- Expose a new route (something like `/parse-md`) that returns markdown
+- Leave `/parse` alone so nothing breaks
+
+The architecture supports this. The parser server just calls whatever OCR endpoint you point it at. Adding a second OCR backend doesn't touch the existing one.
+
+---
 
 ## License
 
 Apache-2.0
 
+---
+
 ## Credits
 
-- [LiteParse](https://github.com/run-llama/liteparse) by LlamaIndex
-- [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) by Baidu
+- [LiteParse](https://github.com/run-llama/liteparse) by LlamaIndex: the Rust document parser
+- [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) by Baidu: the OCR engine

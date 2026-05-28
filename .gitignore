@@ -151,5 +151,9 @@ venv/
 # Bun
 server/*.tsbuildinfo
 
+# Rust
+target/
+libpdfium.so
+
 # Docker
 data/

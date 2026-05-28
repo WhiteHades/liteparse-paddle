@@ -23,91 +23,97 @@
 
 ## Quick Start
 
+Pick one. All five give you `lp` on PATH and a running server.
+
+**pnpm (recommended):**
+
 ```bash
-git clone https://github.com/WhiteHades/liteparse-paddle
-cd liteparse-paddle
-docker compose build --no-cache
-docker compose up -d
+pnpm add -g liteparse-paddle
+git clone https://github.com/WhiteHades/liteparse-paddle ~/liteparse-paddle
+cd ~/liteparse-paddle
+docker compose build --no-cache && docker compose up -d
+lp --help
+```
+
+**Bun:**
+
+```bash
+bun install -g liteparse-paddle
+git clone https://github.com/WhiteHades/liteparse-paddle ~/liteparse-paddle
+cd ~/liteparse-paddle
+docker compose build --no-cache && docker compose up -d
+lp --help
+```
+
+**mise:**
+
+```bash
+mise use -g npm:liteparse-paddle
+git clone https://github.com/WhiteHades/liteparse-paddle ~/liteparse-paddle
+cd ~/liteparse-paddle
+docker compose build --no-cache && docker compose up -d
+lp --help
+```
+
+**One-command install (Linux/macOS):**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/WhiteHades/liteparse-paddle/main/install.sh | bash
+```
+
+**AUR (Arch Linux):**
+
+```bash
+yay -S liteparse-paddle-bin
+git clone https://github.com/WhiteHades/liteparse-paddle ~/liteparse-paddle
+cd ~/liteparse-paddle
+docker compose build --no-cache && docker compose up -d
 ```
 
 <details>
-<summary><b>Don't have Docker?</b> Click to expand install guides.</summary>
+<summary><b>Don't have Docker?</b> Click for install guides.</summary>
 
-**Linux (Ubuntu/Debian):**
-```bash
-sudo apt update && sudo apt install docker.io docker-compose-v2
-sudo usermod -aG docker $USER && newgrp docker
-```
+**Ubuntu/Debian:** `sudo apt update && sudo apt install docker.io docker-compose-v2 && sudo usermod -aG docker $USER && newgrp docker`
 
-**Linux (Arch):**
-```bash
-sudo pacman -S docker docker-compose
-sudo systemctl enable --now docker
-sudo usermod -aG docker $USER && newgrp docker
-```
+**Arch:** `sudo pacman -S docker docker-compose && sudo systemctl enable --now docker && sudo usermod -aG docker $USER && newgrp docker`
 
-**macOS:** Install [Docker Desktop](https://www.docker.com/products/docker-desktop/). Download the `.dmg`, drag to Applications, open it.
+**macOS:** Install [Docker Desktop](https://www.docker.com/products/docker-desktop/).
 
-**Windows:** Install [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop/). It sets up WSL2 for you.
+**Windows:** Install [Docker Desktop](https://www.docker.com/products/docker-desktop/). Includes WSL2.
 </details>
 
 <details>
-<summary><b>Don't have Git?</b> Click to expand.</summary>
+<summary><b>Don't have Git?</b> Click for alternatives.</summary>
 
-Download the zip instead:
-```bash
-curl -L https://github.com/WhiteHades/liteparse-paddle/archive/refs/heads/main.zip -o liteparse-paddle.zip
-unzip liteparse-paddle.zip && cd liteparse-paddle-main
-docker compose build --no-cache && docker compose up -d
-```
+Download the zip: `curl -L https://github.com/WhiteHades/liteparse-paddle/archive/refs/heads/main.zip -o liteparse-paddle.zip && unzip liteparse-paddle.zip && cd liteparse-paddle-main`
 
 Or install Git: `sudo apt install git` (Ubuntu), `sudo pacman -S git` (Arch), `brew install git` (macOS), [git-scm.com](https://git-scm.com) (Windows).
 </details>
 
-After the four commands above, the server is running. Here's how to use it:
-
-### The lp command (recommended)
-
-`lp` is a shell wrapper that ships with this repo. Install it once:
+### Using lp
 
 ```bash
-ln -sf "$(pwd)/bin/lp" ~/.local/bin/lp
-```
-
-Now parse documents with short, readable commands:
-
-```bash
-lp document.pdf                         # plain text output
-lp -j document.pdf                      # JSON output
+lp document.pdf                         # plain text
+lp -j document.pdf                      # JSON
 lp -l zh scanned.pdf                    # Chinese OCR
-lp -s "1-5,10" report.pdf              # specific pages only
-lp -d 200 image.png                     # higher DPI for better OCR
-lp --screenshots ./out document.pdf     # save each page as a PNG
-lp --batch ./input ./output             # parse every document in a folder
-lp --batch ./in ./out --ext .pdf        # only parse PDFs in the folder
+lp -s "1-5,10" report.pdf              # specific pages
+lp -d 200 image.png                     # higher DPI
+lp --screenshots ./out document.pdf     # save pages as PNGs
+lp --batch ./input ./output             # parse a directory
+lp --batch ./in ./out --ext .pdf        # filter by extension
 lp -h                                    # full help
 ```
 
-All `lp` commands talk to the server at `localhost:5000`. The server must be running (step 4 above).
+`lp` calls the server at `localhost:${LP_PORT:-5000}`. Set `LP_PORT` if you changed the port.
 
-### Direct API (curl)
-
-If you prefer raw HTTP or are calling from code:
+### Direct curl API
 
 ```bash
 curl -X POST "http://localhost:5000/parse?text=true" -F "file=@document.pdf"
 curl -X POST "http://localhost:5000/parse" -F "file=@document.pdf"
-curl -X POST "http://localhost:5000/parse" -F "file=@scan.pdf" -F 'config={"ocrLanguage":"zh","dpi":200}'
 ```
 
 ### Rust CLI (no Docker)
-
-For quick one-off parsing with no Docker at all:
-
-```bash
-cargo install liteparse
-lit parse document.pdf
-```
 
 ---
 

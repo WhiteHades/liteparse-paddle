@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+LP_PORT="${LP_PORT:-5000}"
+SERVER_URL="http://localhost:${LP_PORT}"
+
 file=""
 format="text"
 ocr_lang=""
@@ -136,15 +139,15 @@ if [[ -n "$batch_dir" ]]; then
 
     if [[ -n "$config_json" ]]; then
       if [[ "$format" == "json" ]]; then
-        curl -s -X POST http://localhost:5000/parse -F "file=@$f" -F "config=$config_json" > "$outpath"
+        curl -s -X POST "${SERVER_URL}/parse" -F "file=@$f" -F "config=$config_json" > "$outpath"
       else
-        curl -s -X POST "http://localhost:5000/parse?text=true" -F "file=@$f" -F "config=$config_json" > "$outpath"
+        curl -s -X POST "${SERVER_URL}/parse?text=true" -F "file=@$f" -F "config=$config_json" > "$outpath"
       fi
     else
       if [[ "$format" == "json" ]]; then
-        curl -s -X POST http://localhost:5000/parse -F "file=@$f" > "$outpath"
+        curl -s -X POST "${SERVER_URL}/parse" -F "file=@$f" > "$outpath"
       else
-        curl -s -X POST "http://localhost:5000/parse?text=true" -F "file=@$f" > "$outpath"
+        curl -s -X POST "${SERVER_URL}/parse?text=true" -F "file=@$f" > "$outpath"
       fi
     fi
   done
@@ -159,7 +162,7 @@ fi
 if [[ -n "$screenshots" ]]; then
   mkdir -p "$screenshots"
   echo "Saving screenshots to $screenshots/" >&2
-  sc_url="http://localhost:5000/screenshots"
+  sc_url="${SERVER_URL}/screenshots"
   if [[ -n "$pages" ]]; then sc_url="$sc_url?pages=$pages"; fi
 
   if [[ -n "$config_json" ]]; then
@@ -182,7 +185,7 @@ print("  page " + str(d["page_number"]) + ": " + out)
   exit 0
 fi
 
-url="http://localhost:5000/parse"
+url="${SERVER_URL}/parse"
 if [[ "$format" != "json" ]]; then
   url="$url?text=true"
 fi

@@ -23,36 +23,26 @@
 
 ## Quick Start
 
-Pick one. All five give you `lp` on PATH and a running server.
+Install the `lp` wrapper, then start the local server once in the repo.
 
-**pnpm (recommended):**
+### 1. Install `lp`
+
+**pnpm:**
 
 ```bash
 pnpm add -g liteparse-paddle
-git clone https://github.com/WhiteHades/liteparse-paddle ~/liteparse-paddle
-cd ~/liteparse-paddle
-docker compose build --no-cache && docker compose up -d
-lp --help
 ```
 
 **Bun:**
 
 ```bash
 bun install -g liteparse-paddle
-git clone https://github.com/WhiteHades/liteparse-paddle ~/liteparse-paddle
-cd ~/liteparse-paddle
-docker compose build --no-cache && docker compose up -d
-lp --help
 ```
 
 **mise:**
 
 ```bash
 mise use -g npm:liteparse-paddle
-git clone https://github.com/WhiteHades/liteparse-paddle ~/liteparse-paddle
-cd ~/liteparse-paddle
-docker compose build --no-cache && docker compose up -d
-lp --help
 ```
 
 **One-command install (Linux/macOS):**
@@ -65,9 +55,15 @@ curl -fsSL https://raw.githubusercontent.com/WhiteHades/liteparse-paddle/main/in
 
 ```bash
 yay -S liteparse-paddle-bin
+```
+
+### 2. Start the server
+
+```bash
 git clone https://github.com/WhiteHades/liteparse-paddle ~/liteparse-paddle
 cd ~/liteparse-paddle
 docker compose build --no-cache && docker compose up -d
+lp --help
 ```
 
 <details>
@@ -96,12 +92,13 @@ Or install Git: `sudo apt install git` (Ubuntu), `sudo pacman -S git` (Arch), `b
 lp document.pdf                         # plain text
 lp -j document.pdf                      # JSON
 lp -l zh scanned.pdf                    # Chinese OCR
-lp -s "1-5,10" report.pdf              # specific pages
+lp -s "1-5,10" report.pdf               # specific pages
 lp -d 200 image.png                     # higher DPI
+lp --screenshots document.pdf           # save pages to ./screenshots
 lp --screenshots ./out document.pdf     # save pages as PNGs
 lp --batch ./input ./output             # parse a directory
 lp --batch ./in ./out --ext .pdf        # filter by extension
-lp -h                                    # full help
+lp -h                                   # full help
 ```
 
 `lp` calls the server at `localhost:${LP_PORT:-5000}`. Set `LP_PORT` if you changed the port.
@@ -112,8 +109,6 @@ lp -h                                    # full help
 curl -X POST "http://localhost:5000/parse?text=true" -F "file=@document.pdf"
 curl -X POST "http://localhost:5000/parse" -F "file=@document.pdf"
 ```
-
-### Rust CLI (no Docker)
 
 ---
 

@@ -1,21 +1,22 @@
 # PaddleOCR Service
 
-This is a simple Flask server that wraps PaddleOCR to conform to the LiteParse OCR API specification (see `../../OCR_API_SPEC.md`).
+This is a small FastAPI server that wraps PaddleOCR and exposes the OCR endpoint expected by LiteParse.
 
 PaddleOCR is especially fast and accurate for Chinese, Japanese, and Korean languages.
 
 ## Build and Run
 
 ```bash
-# install and run (in one command)
+uv sync --dev
 uv run server.py
 ```
 
 ## Usage
 
-The service exposes a single endpoint:
+The service exposes:
 
 - `POST /ocr` - Perform OCR on an uploaded image
+- `GET /health` - Health check
 
 ### Parameters
 
@@ -42,7 +43,7 @@ curl -X POST -F "file=@image.png" -F "language=zh" http://localhost:8829/ocr
 }
 ```
 
-This conforms to the LiteParse OCR API specification.
+This matches LiteParse's OCR server response shape.
 
 ## Supported Languages
 
@@ -61,7 +62,7 @@ PaddleOCR supports 80+ languages with excellent support for CJK:
 - `ar` - Arabic
 - `hi` - Hindi/Devanagari
 
-Full list: https://github.com/PaddlePaddle/PaddleOCR
+Full list: <https://github.com/PaddlePaddle/PaddleOCR>
 
 ## Performance
 
@@ -98,18 +99,17 @@ const result = await parser.parse('document.pdf');
 
 ## Testing
 
-If you make changes to the server, make sure to adapt and run tests:
-
 ```bash
+uv sync --dev
 uv run pytest test_server.py
 ```
 
 ## GPU Support
 
-For GPU acceleration, set `use_gpu=True` in `server.py`.
+For GPU acceleration, switch the PaddlePaddle package source to a CUDA build and run the container with GPU access.
 
 ## Notes
 
 - First request may be slow as PaddleOCR downloads models
 - Models are cached after first use
-- Default port is 8829 (different from EasyOCR's 8828)
+- Default port is `8829`

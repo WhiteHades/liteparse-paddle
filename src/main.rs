@@ -1,19 +1,15 @@
-use std::{
-    env,
-    io::Write,
-    path::Path,
-};
+use std::{env, io::Write, path::Path};
 
 use axum::{
-    Router,
     extract::{DefaultBodyLimit, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
+    Router,
 };
 use axum_extra::extract::Multipart;
-use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine;
 use liteparse::{LiteParse, LiteParseConfig, OutputFormat};
 use serde::{Deserialize, Serialize};
 use tempfile::{Builder, NamedTempFile};
@@ -124,10 +120,11 @@ async fn read_upload(mut multipart: Multipart) -> Result<UploadPayload, Response
                 match field.bytes().await {
                     Ok(uploaded) => bytes = Some(uploaded.to_vec()),
                     Err(err) => {
-                        return Err(
-                            (StatusCode::BAD_REQUEST, format!("Invalid file upload: {err}"))
-                                .into_response(),
+                        return Err((
+                            StatusCode::BAD_REQUEST,
+                            format!("Invalid file upload: {err}"),
                         )
+                            .into_response())
                     }
                 }
             }
@@ -137,13 +134,11 @@ async fn read_upload(mut multipart: Multipart) -> Result<UploadPayload, Response
                         match serde_json::from_str::<ClientConfig>(&raw) {
                             Ok(parsed) => config = parsed,
                             Err(err) => {
-                                return Err(
-                                    (
-                                        StatusCode::BAD_REQUEST,
-                                        format!("Invalid config JSON: {err}"),
-                                    )
-                                        .into_response(),
+                                return Err((
+                                    StatusCode::BAD_REQUEST,
+                                    format!("Invalid config JSON: {err}"),
                                 )
+                                    .into_response())
                             }
                         }
                     }
@@ -250,15 +245,18 @@ async fn parse_handler(
     let text_only = query.text.as_deref() == Some("true");
 
     if text_only {
-        (StatusCode::OK, [("Content-Type", "text/plain")], result.text).into_response()
-    } else {
-        let json = serde_json::to_string(&ParseResponse { pages: result.pages }).unwrap();
         (
             StatusCode::OK,
-            [("Content-Type", "application/json")],
-            json,
+            [("Content-Type", "text/plain")],
+            result.text,
         )
             .into_response()
+    } else {
+        let json = serde_json::to_string(&ParseResponse {
+            pages: result.pages,
+        })
+        .unwrap();
+        (StatusCode::OK, [("Content-Type", "application/json")], json).into_response()
     }
 }
 

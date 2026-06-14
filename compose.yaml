@@ -11,6 +11,10 @@ services:
     depends_on:
       paddle-ocr:
         condition: service_healthy
+        required: false
+      paddle-ocr-gpu:
+        condition: service_healthy
+        required: false
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
       interval: 15s
@@ -20,6 +24,7 @@ services:
     restart: unless-stopped
 
   paddle-ocr:
+    profiles: ["cpu", "default"]
     build:
       context: ./python
       dockerfile: Dockerfile
@@ -31,7 +36,7 @@ services:
     environment:
       PADDLE_OCR_TIER: ${PADDLE_OCR_TIER:-medium}
     volumes:
-      - paddle-ocr-models:/root/.paddleocr
+      - paddle-ocr-models:/root/.paddlex
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8829/health')"]
       interval: 15s
@@ -46,6 +51,13 @@ services:
   # Requires NVIDIA Container Toolkit on the host. The `gpu` profile only
   # brings up the paddle-ocr service with GPU access; liteparse-server stays
   # on the CPU (its workload is cheap).
+  #
+  # `network_mode` is intentionally left as the default compose network so the
+  # container is reachable on the same Docker network as liteparse-server. The
+  # `aliases` below make the GPU service addressable as `paddle-ocr` so the
+  # server's PADDLE_OCR_URL=http://paddle-ocr:8829/ocr resolves correctly
+  # whether the CPU or GPU variant is running. Do not start both profiles
+  # at the same time — they both bind host port 8829.
   paddle-ocr-gpu:
     profiles: ["gpu"]
     build:
@@ -59,7 +71,11 @@ services:
     environment:
       PADDLE_OCR_TIER: ${PADDLE_OCR_TIER:-medium}
     volumes:
-      - paddle-ocr-models:/root/.paddleocr
+      - paddle-ocr-models:/root/.paddlex
+    networks:
+      default:
+        aliases:
+          - paddle-ocr
     deploy:
       resources:
         reservations:

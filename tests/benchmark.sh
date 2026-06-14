@@ -11,7 +11,7 @@ TEST_IMAGE="${TEST_IMAGE:-/tmp/v6-test.png}"
 
 # Ground-truth text we expect V6 to recover (per the test image generated in
 # /tmp/v6-test.png). Loose check: at least these substrings must appear.
-EXPECTED_HITS=("Hello World" "PADDLE_OCR_TIER" "GPU" "CPU")
+EXPECTED_HITS=("Hello World" "PADDLE_OCR_TIER" "PaddleOCR V6" "NVIDIA")
 
 # 1. Sanity-check the service is up
 if ! curl -fsS "http://localhost:${PADDLE_PORT}/health" >/dev/null 2>&1; then
@@ -25,9 +25,9 @@ if [[ ! -f "${TEST_IMAGE}" ]]; then
 from PIL import Image, ImageDraw
 img = Image.new('RGB', (600, 200), color=(255, 255, 255))
 d = ImageDraw.Draw(img)
-d.text((20, 30),  'Hello World from PaddleOCR V6', fill=(0, 0, 0))
-d.text((20, 70),  'PADDLE_OCR_TIER=medium',         fill=(0, 0, 0))
-d.text((20, 110), 'GPU off, CPU inference',         fill=(0, 0, 0))
+    d.text((20, 30),  'Hello World from PaddleOCR V6', fill=(0, 0, 0))
+    d.text((20, 70),  'PADDLE_OCR_TIER=medium',         fill=(0, 0, 0))
+    d.text((20, 110), 'GPU on, NVIDIA GTX 1650 Ti',      fill=(0, 0, 0))
 img.save('${TEST_IMAGE}')
 " || { echo "FAIL: could not generate ${TEST_IMAGE}" >&2; exit 1; }
 fi

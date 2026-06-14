@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# lp-paddle-gpu: switch the local paddle-ocr service to the GPU build.
+# Requires the NVIDIA Container Toolkit on the host.
+# Pass --off to switch back to CPU.
+
+set -euo pipefail
+
+cd ~/Codes/liteparse-paddle
+
+if [[ "${1:-}" == "--off" ]] || [[ "${1:-}" == "--cpu" ]]; then
+  echo "Switching to CPU paddle-ocr..."
+  docker compose --profile gpu down paddle-ocr-gpu 2>/dev/null || true
+  docker compose up -d --no-deps paddle-ocr
+  echo "CPU paddle-ocr started on :8829"
+  exit 0
+fi
+
+# 1. Sanity-check the NVIDIA runtime is available
+if ! command -v nvidia-ctk >/dev/null 2>&1; then
+  echo "Error: nvidia-container-toolkit is not installed." >&2
+  echo "Install:" >&2
+  echo "  sudo pacman -S nvidia-container-toolkit" >&2
+  echo "  sudo nvidia-ctk runtime configure --runtime=docker" >&2
+  echo "  sudo systemctl restart docker" >&2
+  exit 1
+fi
+
+if ! docker info 2>/dev/null | grep -q 'Runtimes:.*nvidia'; then
+  echo "Error: Docker is not configured for the NVIDIA runtime." >&2
+  echo "Run: sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker" >&2
+  exit 1
+fi
+
+# 2. Bring up the GPU profile
+echo "Switching to GPU paddle-ocr..."
+docker compose --profile gpu up -d --build paddle-ocr-gpu
+
+# 3. Bring down the CPU paddle-ocr so port 8829 is unambiguous
+docker compose stop paddle-ocr 2>/dev/null || true
+
+# 4. Verify
+sleep 5
+if curl -fsS "http://localhost:8829/health" >/dev/null 2>&1; then
+  echo "GPU paddle-ocr is up on :8829"
+  echo "Verify GPU is actually used:"
+  echo "  docker logs paddle-ocr-gpu 2>&1 | grep -i gpu"
+else
+  echo "Warning: paddle-ocr-gpu not yet responding on :8829 (it may still be starting)"
+  echo "Check: docker logs paddle-ocr-gpu"
+fi

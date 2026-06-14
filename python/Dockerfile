@@ -13,7 +13,7 @@ COPY pyproject.toml ./
 
 RUN pip install --no-cache-dir \
     --extra-index-url ${PADDLE_INDEX} \
-    paddlepaddle==3.3.0 \
+    paddlepaddle==3.2.2 \
     paddleocr==3.7.0 \
     fastapi>=0.131.0 \
     uvicorn>=0.41.0 \

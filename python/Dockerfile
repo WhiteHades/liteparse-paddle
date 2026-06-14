@@ -11,7 +11,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY pyproject.toml ./
 
-RUN pip install --no-cache-dir \
+# Pinned to 3.2.2 (not the latest 3.3.x) because PaddlePaddle 3.3.0 and 3.3.1
+# both hit a PaddlePaddle IR bug in the oneDNN instruction path on AMD Zen2
+# CPUs (incl. Ryzen 7 4800H): "ConvertPirAttribute2RuntimeAttribute not
+# support [pir::ArrayAttribute<pir::DoubleAttribute>]" raised from
+# fluid/framework/new_executor/instruction/onednn/onednn_instruction.cc:116.
+# 3.2.2 is the last release that does not have this regression. Track upstream
+# for a fix; revisit when a 3.3.x or 3.4.x release resolves the issue.
     --extra-index-url ${PADDLE_INDEX} \
     paddlepaddle==3.2.2 \
     paddleocr==3.7.0 \

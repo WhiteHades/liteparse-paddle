@@ -11,30 +11,69 @@ services:
     depends_on:
       paddle-ocr:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
 
   paddle-ocr:
     build:
       context: ./python
       dockerfile: Dockerfile
+      args:
+        PADDLE_INDEX: ${PADDLE_INDEX:-https://www.paddlepaddle.org.cn/packages/stable/cpu/}
     container_name: paddle-ocr
     ports:
       - "8829:8829"
-    # GPU acceleration (requires NVIDIA Container Toolkit + CUDA paddlepaddle):
-    # 1. Change python/Dockerfile to use the CUDA index:
-    #    --index-url https://www.paddlepaddle.org.cn/packages/stable/cuda12/
-    # 2. Uncomment the deploy block below
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
+    environment:
+      PADDLE_OCR_TIER: ${PADDLE_OCR_TIER:-medium}
+    volumes:
+      - paddle-ocr-models:/root/.paddleocr
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8829/health')"]
       interval: 15s
       timeout: 5s
       retries: 10
-      start_period: 120s
+      start_period: 300s
     restart: unless-stopped
+
+  # GPU acceleration: set LP_GPU=1 in your shell or .env, then:
+  #   LP_GPU=1 PADDLE_INDEX=https://www.paddlepaddle.org.cn/packages/stable/cuda12/ \
+  #     docker compose --profile gpu up -d --build
+  # Requires NVIDIA Container Toolkit on the host. The `gpu` profile only
+  # brings up the paddle-ocr service with GPU access; liteparse-server stays
+  # on the CPU (its workload is cheap).
+  paddle-ocr-gpu:
+    profiles: ["gpu"]
+    build:
+      context: ./python
+      dockerfile: Dockerfile
+      args:
+        PADDLE_INDEX: ${PADDLE_INDEX:-https://www.paddlepaddle.org.cn/packages/stable/cuda12/}
+    container_name: paddle-ocr-gpu
+    ports:
+      - "8829:8829"
+    environment:
+      PADDLE_OCR_TIER: ${PADDLE_OCR_TIER:-medium}
+    volumes:
+      - paddle-ocr-models:/root/.paddleocr
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8829/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 300s
+    restart: unless-stopped
+
+volumes:
+  paddle-ocr-models:

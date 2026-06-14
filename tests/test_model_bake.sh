@@ -41,10 +41,12 @@ fi
 grep -q 'EXPOSE 8829' python/Dockerfile || fail "python/Dockerfile does not EXPOSE 8829"
 grep -qE 'CMD.*server\.py' python/Dockerfile || fail "python/Dockerfile CMD is not server.py"
 
-# 7. The compose.yaml mounts a volume at /root/.paddleocr so the pre-baked
+# 7. The compose.yaml mounts a volume at /root/.paddlex so the pre-baked
 #    models survive across `docker compose build --no-cache` rebuilds
-if ! grep -q '/root/.paddleocr' compose.yaml; then
-  fail "compose.yaml is not mounting a volume at /root/.paddleocr (model cache won't persist)"
+#    (PaddleOCR 3.7.0 stores its model cache in /root/.paddlex/official_models/,
+#    not the legacy /root/.paddleocr/ used by v2.x).
+if ! grep -q '/root/.paddlex' compose.yaml; then
+  fail "compose.yaml is not mounting a volume at /root/.paddlex (model cache won't persist)"
 fi
 
 echo "OK: python/Dockerfile pre-bakes V6 models and compose.yaml persists them"

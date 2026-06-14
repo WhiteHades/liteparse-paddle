@@ -8,8 +8,8 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/engine-liteparse%20v2%20(rust)-000000?style=flat-square&logo=rust&logoColor=white"/>
-  <img src="https://img.shields.io/badge/ocr-paddleocr%20pp--ocrv5-orange?style=flat-square&logo=python&logoColor=white"/>
-  <img src="https://img.shields.io/badge/109-languages-22c55e?style=flat-square"/>
+  <img src="https://img.shields.io/badge/ocr-paddleocr%20pp--ocrv6-orange?style=flat-square&logo=python&logoColor=white"/>
+  <img src="https://img.shields.io/badge/50-languages-22c55e?style=flat-square"/>
   <img src="https://img.shields.io/badge/gpu-cuda%20ready-06b6d4?style=flat-square"/>
   <img src="https://img.shields.io/badge/runtime-docker%20compose-2496ED?style=flat-square&logo=docker&logoColor=white"/>
   <img src="https://img.shields.io/badge/license-Apache--2.0-3b82f6?style=flat-square"/>
@@ -23,9 +23,9 @@
 
 ## Quick Start
 
-Install the `lp` wrapper, then start the local server once in the repo.
+Install the `lp-paddle` wrapper, then start the local server once in the repo.
 
-### 1. Install `lp`
+### 1. Install `lp-paddle`
 
 **pnpm:**
 
@@ -57,13 +57,15 @@ curl -fsSL https://raw.githubusercontent.com/WhiteHades/liteparse-paddle/main/in
 yay -S liteparse-paddle-bin
 ```
 
+The AUR package installs the wrapper as `/usr/bin/lp-paddle` (renamed to avoid conflict with CUPS' `/usr/bin/lp`). It is a wrapper only — the Docker stack comes up separately. See step 2.
+
 ### 2. Start the server
 
 ```bash
 git clone https://github.com/WhiteHades/liteparse-paddle ~/liteparse-paddle
 cd ~/liteparse-paddle
 docker compose build --no-cache && docker compose up -d
-lp --help
+lp-paddle --help
 ```
 
 <details>
@@ -86,22 +88,22 @@ Download the zip: `curl -L https://github.com/WhiteHades/liteparse-paddle/archiv
 Or install Git: `sudo apt install git` (Ubuntu), `sudo pacman -S git` (Arch), `brew install git` (macOS), [git-scm.com](https://git-scm.com) (Windows).
 </details>
 
-### Using lp
+### Using lp-paddle
 
 ```bash
-lp document.pdf                         # plain text
-lp -j document.pdf                      # JSON
-lp -l zh scanned.pdf                    # Chinese OCR
-lp -s "1-5,10" report.pdf               # specific pages
-lp -d 200 image.png                     # higher DPI
-lp --screenshots document.pdf           # save pages to ./screenshots
-lp --screenshots ./out document.pdf     # save pages as PNGs
-lp --batch ./input ./output             # parse a directory
-lp --batch ./in ./out --ext .pdf        # filter by extension
-lp -h                                   # full help
+lp-paddle document.pdf                         # plain text
+lp-paddle -j document.pdf                      # JSON
+lp-paddle -l zh scanned.pdf                    # Chinese OCR
+lp-paddle -s "1-5,10" report.pdf               # specific pages
+lp-paddle -d 200 image.png                     # higher DPI
+lp-paddle --screenshots document.pdf           # save pages to ./screenshots
+lp-paddle --screenshots ./out document.pdf     # save pages as PNGs
+lp-paddle --batch ./input ./output             # parse a directory
+lp-paddle --batch ./in ./out --ext .pdf        # filter by extension
+lp-paddle -h                                   # full help
 ```
 
-`lp` calls the server at `localhost:${LP_PORT:-5000}`. Set `LP_PORT` if you changed the port.
+`lp-paddle` calls the server at `localhost:${LP_PORT:-5000}`. Set `LP_PORT` if you changed the port.
 
 ### Direct curl API
 
@@ -119,7 +121,7 @@ curl -X POST "http://localhost:5000/parse" -F "file=@document.pdf"
 | What it does | Pulls text out of documents. PDFs, Word, Excel, PowerPoint, images. |
 | How | HTTP API on port 5000. You send a file, it sends back text or JSON. |
 | Where | Your machine. Not the cloud. Files never leave your computer. |
-| OCR | PaddleOCR PP-OCRv5. 109 languages. More accurate than Tesseract. |
+| OCR | PaddleOCR PP-OCRv6. 50 languages in a single unified multilingual model (tiny: 49). |
 | Parser | LiteParse v2 (Rust). Reads native PDF text, merges it with OCR results. |
 | Stack | Two Docker containers: a Rust server and a Python OCR sidecar. |
 | Cost | Free. No API keys, no accounts, no usage limits. |
@@ -212,7 +214,7 @@ Description=LiteParse PaddleOCR document parsing server
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=%h/liteparse-paddle
+WorkingDirectory=%h/Codes/liteparse-paddle
 ExecStart=/usr/bin/docker compose up -d
 ExecStop=/usr/bin/docker compose down
 StandardOutput=journal
@@ -233,11 +235,20 @@ Change `%h/liteparse-paddle` if you cloned elsewhere. Verify: `systemctl --user 
 
 CPU-only by default. To enable CUDA:
 
-1. Switch `python/Dockerfile` to the CUDA pip index
-2. Uncomment the `deploy` block in `compose.yaml`
-3. `docker compose build paddle-ocr && docker compose up -d`
+```bash
+# 1. Set the LP_GPU env var (controls the pip index in the paddle-ocr image build)
+echo "LP_GPU=1" >> .env
 
-Requires [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) on the host.
+# 2. Use the GPU compose profile
+LP_GPU=1 docker compose --profile gpu up -d --build
+```
+
+Requires [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) on the host. Once enabled, the `paddle-ocr` service runs on the GPU and reports the model in the startup log:
+
+```bash
+docker logs paddle-ocr 2>&1 | grep -i gpu
+# [init] using GPU: NVIDIA GeForce GTX 1650 Ti
+```
 
 ---
 

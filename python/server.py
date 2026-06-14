@@ -1,5 +1,6 @@
 import io
 import logging
+import os
 from typing import Any
 
 import numpy as np
@@ -12,23 +13,44 @@ from PIL import Image
 from pydantic import BaseModel
 
 
+VALID_TIERS = ("tiny", "small", "medium")
+
+
+def resolve_tier() -> str:
+    """Read the PADDLE_OCR_TIER env var, falling back to 'medium' on any
+    bad value. Validated against the set of PaddleOCR 3.7.0 V6 model tiers."""
+    raw = os.environ.get("PADDLE_OCR_TIER", "medium").strip().lower()
+    if raw not in VALID_TIERS:
+        logging.warning("Invalid PADDLE_OCR_TIER=%r, falling back to 'medium'", raw)
+        return "medium"
+    return raw
+
+
 class OcrResponse(BaseModel):
     results: list[Any]
 
 
 class StatusResponse(BaseModel):
     status: str
+    paddleocr_version: str = ""
+    tier: str = ""
 
 
 class PaddleOCRServer:
     def __init__(self) -> None:
-        self.ocr: PaddleOCR = PaddleOCR(
-            lang="en",
+        self.tier: str = resolve_tier()
+        self.ocr: PaddleOCR = self._build_ocr("en")
+        self.current_language: str = "en"
+
+    def _build_ocr(self, language: str) -> PaddleOCR:
+        return PaddleOCR(
+            lang=language,
+            text_detection_model_name=f"PP-OCRv6_{self.tier}_det",
+            text_recognition_model_name=f"PP-OCRv6_{self.tier}_rec",
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
             use_textline_orientation=True,
         )
-        self.current_language: str = "en"
 
     @staticmethod
     def normalize_language(language: str) -> str:
@@ -59,13 +81,7 @@ class PaddleOCRServer:
             try:
                 # Initialize OCR if needed or language changed
                 if self.current_language != language:
-                    # PaddleOCR 3.x parameters
-                    self.ocr = PaddleOCR(
-                        lang=language,
-                        use_doc_orientation_classify=False,
-                        use_doc_unwarping=False,
-                        use_textline_orientation=True,
-                    )
+                    self.ocr = self._build_ocr(language)
                     self.current_language = language
 
                 # Load image
@@ -100,16 +116,18 @@ class PaddleOCRServer:
                 res_data = (
                     result.get("res", result) if isinstance(result, dict) else result
                 )
-                # Extract texts, scores, and boxes from the result
+                # Extract texts, scores, boxes, and (V6) rec_polys from the result
                 if isinstance(res_data, dict):
                     texts = res_data.get("rec_texts", [])
                     scores = res_data.get("rec_scores", [])
                     boxes = res_data.get("rec_boxes", [])
+                    polys = res_data.get("rec_polys", None)
                 else:
                     # Fallback for result object with attributes
                     texts = getattr(res_data, "rec_texts", []) or []
                     scores = getattr(res_data, "rec_scores", []) or []
                     boxes = getattr(res_data, "rec_boxes", []) or []
+                    polys = getattr(res_data, "rec_polys", None)
 
                 # Convert numpy arrays to lists if needed
                 if hasattr(texts, "tolist"):
@@ -118,6 +136,8 @@ class PaddleOCRServer:
                     scores = scores.tolist()
                 if hasattr(boxes, "tolist"):
                     boxes = boxes.tolist()
+                if polys is not None and hasattr(polys, "tolist"):
+                    polys = polys.tolist()
 
                 # Combine them - they should be parallel arrays
                 for i in range(len(texts)):
@@ -136,15 +156,45 @@ class PaddleOCRServer:
                     else:
                         bbox = [0, 0, 0, 0]
 
+                    # Extract 4-point rotation polygon (V6) so the upstream
+                    # Rust HTTP OCR engine can do rotation recovery for
+                    # non-axis-aligned text. polys[i] is [[x1,y1],...,[x4,y4]].
+                    polygon = None
+                    if polys is not None and i < len(polys):
+                        poly = polys[i]
+                        if hasattr(poly, "tolist"):
+                            poly = poly.tolist()
+                        flat: list[float] = []
+                        for point in poly:
+                            if hasattr(point, "tolist"):
+                                point = point.tolist()
+                            flat.extend(float(c) for c in point)
+                        if len(flat) == 8:
+                            polygon = flat
+
                     formatted.append(
-                        {"text": text, "bbox": bbox, "confidence": confidence}
+                        {
+                            "text": text,
+                            "bbox": bbox,
+                            "confidence": confidence,
+                            "polygon": polygon,
+                        }
                     )
 
             return OcrResponse(results=formatted)
 
         @app.get("/health")
         def health() -> StatusResponse:
-            return StatusResponse(status="healthy")
+            from importlib.metadata import version as _pkg_version
+            try:
+                paddleocr_version = _pkg_version("paddleocr")
+            except Exception:
+                paddleocr_version = ""
+            return StatusResponse(
+                status="healthy",
+                paddleocr_version=paddleocr_version,
+                tier=self.tier,
+            )
 
         return app
 

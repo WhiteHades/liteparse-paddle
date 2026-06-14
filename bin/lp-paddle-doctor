@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# lp-paddle-doctor: check the local PaddleOCR stack is healthy and serving V6.
+# Hits both /health endpoints, reports paddleocr version + tier, runs a
+# 1-call warm latency probe.
+
+set -euo pipefail
+
+LP_PORT="${LP_PORT:-5000}"
+PADDLE_PORT="${PADDLE_PADDLE_PORT:-8829}"
+
+green() { printf "\033[32m%s\033[0m\n" "$1"; }
+red()   { printf "\033[31m%s\033[0m\n" "$1"; }
+dim()   { printf "\033[2m%s\033[0m\n" "$1"; }
+
+printf "liteparse-paddle health check\n"
+printf "==============================\n\n"
+
+# 1. Rust server /health
+printf "  liteparse-server (:%s/health)  " "${LP_PORT}"
+if body=$(curl -fsS "http://localhost:${LP_PORT}/health" 2>/dev/null); then
+  green "OK"
+else
+  red "DOWN"
+  dim "  Fix: cd ~/Codes/liteparse-paddle && docker compose up -d"
+  exit 1
+fi
+
+# 2. PaddleOCR /health (with version + tier)
+printf "  paddle-ocr (:%s/health)         " "${PADDLE_PORT}"
+if body=$(curl -fsS "http://localhost:${PADDLE_PORT}/health" 2>/dev/null); then
+  ver=$(echo "${body}" | grep -oE '"paddleocr_version":"[^"]*"' | cut -d'"' -f4)
+  tier=$(echo "${body}" | grep -oE '"tier":"[^"]*"' | cut -d'"' -f4)
+  green "OK  (paddleocr ${ver}, tier=${tier})"
+else
+  red "DOWN"
+  dim "  Fix: cd ~/Codes/liteparse-paddle && docker compose up -d paddle-ocr"
+  exit 1
+fi
+
+# 3. Warm latency probe (a 1x1 PNG should be ~0.3-2s warm on V6 CPU)
+printf "  warm latency probe               "
+tmp=$(mktemp /tmp/lp-doctor.XXXXXX.png)
+trap 'rm -f "${tmp}"' EXIT
+# Render a minimal 200x60 test image
+if command -v python3 >/dev/null 2>&1; then
+  python3 -c "
+from PIL import Image, ImageDraw
+img = Image.new('RGB', (200, 60), color=(255, 255, 255))
+d = ImageDraw.Draw(img)
+d.text((10, 20), 'lp-paddle doctor probe', fill=(0, 0, 0))
+img.save('${tmp}')
+" 2>/dev/null
+fi
+
+if [[ -f "${tmp}" ]]; then
+  start=$(date +%s%N)
+  if curl -fsS -X POST "http://localhost:${PADDLE_PORT}/ocr" \
+       -F "file=@${tmp}" -F "language=en" >/dev/null 2>&1; then
+    end=$(date +%s%N)
+    ms=$(( (end - start) / 1000000 ))
+    if [[ ${ms} -lt 5000 ]]; then
+      green "OK  (${ms}ms)"
+    else
+      red "SLOW  (${ms}ms — V6 medium should be <2s on CPU after warm-up)"
+    fi
+  else
+    red "OCR CALL FAILED"
+    dim "  Check: docker logs paddle-ocr"
+    exit 1
+  fi
+else
+  dim "skipped (no python3+pillow)"
+fi
+
+echo
+green "All checks passed."

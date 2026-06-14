@@ -56,7 +56,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -n "$show_help" ]]; then
-  echo "Usage: lp [options] <file>"
+  echo "Usage: lp-paddle [options] <file>"
   echo ""
   echo "Parse any document with PaddleOCR (PDF, DOCX, XLSX, PPTX, CSV, TSV, RTF,"
   echo "images: JPG, PNG, GIF, BMP, TIFF, WebP, SVG)"
@@ -93,16 +93,16 @@ if [[ -n "$show_help" ]]; then
   echo "  -h, --help             Show this help"
   echo ""
   echo "Examples:"
-  echo "  lp doc.pdf                            Plain text output"
-  echo "  lp -j doc.pdf                         JSON output"
-  echo "  lp -l zh scanned.pdf                  Chinese OCR"
-  echo "  lp -s \"1-5,10\" doc.pdf               Specific pages"
-  echo "  lp -n native.pdf                      No OCR (native-text PDF)"
-  echo "  lp -o result.txt doc.pdf              Save to file"
-  echo "  lp --screenshots doc.pdf              Generate page screenshots"
-  echo "  lp --batch . ./output                 Parse all docs in current dir"
-  echo "  lp --batch . ./output --recursive     Walk subdirs"
-  echo "  lp --batch . ./output --ext .pdf      PDFs only"
+  echo "  lp-paddle doc.pdf                            Plain text output"
+  echo "  lp-paddle -j doc.pdf                         JSON output"
+  echo "  lp-paddle -l zh scanned.pdf                  Chinese OCR"
+  echo "  lp-paddle -s \"1-5,10\" doc.pdf               Specific pages"
+  echo "  lp-paddle -n native.pdf                      No OCR (native-text PDF)"
+  echo "  lp-paddle -o result.txt doc.pdf              Save to file"
+  echo "  lp-paddle --screenshots doc.pdf              Generate page screenshots"
+  echo "  lp-paddle --batch . ./output                 Parse all docs in current dir"
+  echo "  lp-paddle --batch . ./output --recursive     Walk subdirs"
+  echo "  lp-paddle --batch . ./output --ext .pdf      PDFs only"
   exit 0
 fi
 

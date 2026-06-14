@@ -1,6 +1,6 @@
 pkgbase = liteparse-paddle-bin
 	pkgdesc = CLI wrapper for local document parsing server (LiteParse + PaddleOCR)
-	pkgver = 0.2.0
+	pkgver = 0.3.0
 	pkgrel = 1
 	url = https://github.com/WhiteHades/liteparse-paddle
 	arch = any
@@ -9,7 +9,7 @@ pkgbase = liteparse-paddle-bin
 	depends = curl
 	depends = python
 	options = !debug
-	source = liteparse-paddle-bin-0.2.0.tar.gz::https://github.com/WhiteHades/liteparse-paddle/archive/refs/tags/v0.2.0.tar.gz
+	source = liteparse-paddle-bin-0.3.0.tar.gz::https://github.com/WhiteHades/liteparse-paddle/archive/refs/tags/v0.3.0.tar.gz
 	sha256sums = SKIP
 
 pkgname = liteparse-paddle-bin

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== liteparse-paddle installer (v0.2.0) ==="
+echo "=== liteparse-paddle installer (v0.3.0) ==="
 echo ""
 
 # 1. Check Docker
@@ -17,7 +17,7 @@ echo "Docker found"
 # 2. Check for curl and python3
 for cmd in curl python3; do
   if ! command -v "$cmd" &>/dev/null; then
-    echo "Warning: $cmd is not installed. Some features of lp may not work."
+    echo "Warning: $cmd is not installed. Some features of lp-paddle may not work."
   fi
 done
 
@@ -37,7 +37,7 @@ else
 fi
 
 # 4. Clone or update the repo
-REPO_DIR="${HOME}/liteparse-paddle"
+REPO_DIR="${HOME}/Codes/liteparse-paddle"
 if [[ -d "${REPO_DIR}" ]]; then
   echo "Repo already exists at ${REPO_DIR}. Pulling latest..."
   cd "${REPO_DIR}"
@@ -54,9 +54,9 @@ LP_PORT="${LP_PORT}" docker compose build --no-cache
 echo "Starting server on port ${LP_PORT}..."
 LP_PORT="${LP_PORT}" docker compose up -d
 
-# 6. Install lp command
+# 6. Install lp-paddle command
 mkdir -p "${HOME}/.local/bin"
-ln -sf "${REPO_DIR}/bin/lp" "${HOME}/.local/bin/lp"
+ln -sf "${REPO_DIR}/bin/lp-paddle" "${HOME}/.local/bin/lp-paddle"
 
 # 7. Save LP_PORT if non-default
 if [[ "${LP_PORT}" != "5000" ]]; then
@@ -85,9 +85,9 @@ for i in $(seq 1 30); do
     echo "Done. liteparse-paddle is running."
     echo ""
     echo "  Server: http://localhost:${LP_PORT}"
-    echo "  CLI:    lp (try: lp --help)"
+    echo "  CLI:    lp-paddle (try: lp-paddle --help)"
     echo ""
-    echo "Quick test: lp document.pdf"
+    echo "Quick test: lp-paddle document.pdf"
     exit 0
   fi
   sleep 2

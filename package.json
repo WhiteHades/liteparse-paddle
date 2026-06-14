@@ -2,9 +2,18 @@
   "name": "liteparse-paddle",
   "version": "0.3.0",
   "description": "CLI wrapper for the liteparse-paddle local document parsing server",
-  "bin": { "lp-paddle": "bin/lp-paddle" },
-  "files": ["bin/lp-paddle"],
+  "bin": {
+    "lp-paddle": "bin/lp-paddle"
+  },
+  "files": [
+    "bin/lp-paddle"
+  ],
   "license": "Apache-2.0",
-  "repository": "github:WhiteHades/liteparse-paddle",
-  "engines": { "node": ">=18" }
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WhiteHades/liteparse-paddle.git"
+  },
+  "engines": {
+    "node": ">=18"
+  }
 }

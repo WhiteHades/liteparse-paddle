@@ -18,6 +18,7 @@ COPY pyproject.toml ./
 # fluid/framework/new_executor/instruction/onednn/onednn_instruction.cc:116.
 # 3.2.2 is the last release that does not have this regression. Track upstream
 # for a fix; revisit when a 3.3.x or 3.4.x release resolves the issue.
+RUN pip install --no-cache-dir \
     --extra-index-url ${PADDLE_INDEX} \
     paddlepaddle==3.2.2 \
     paddleocr==3.7.0 \
